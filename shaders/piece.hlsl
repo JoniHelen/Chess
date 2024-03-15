@@ -25,13 +25,10 @@ VertexOutput vert(VertexInput input)
     return output;
 }
 
+Texture2D mainTex : register(t0);
+SamplerState mainTexSampler : register(s0);
+
 float4 frag(VertexOutput input) : SV_TARGET
 {
-    float2 board = floor(input.uv * 8);
-
-    float2 res = fmod(board, 2.0f);
-
-    float3 col = res.x == res.y ? float3(0.41176470588, 0.14117647058, 0.07450980392) : float3(0.94509803921, 0.76470588235, 0.55686274509);
-
-    return float4(col, 1.0);
+    return mainTex.Sample(mainTexSampler, input.uv);
 }

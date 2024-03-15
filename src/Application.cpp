@@ -3,6 +3,10 @@
 
 int Application::Run(HINSTANCE hInstance) {
 
+    if(FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
+        throw std::runtime_error("CoInit failed");
+    }
+
     const auto wClassName = L"Main";
     CreateWindowClass(hInstance, wClassName);
     const HWND hWindow = InitWindow(hInstance, wClassName, L"Chess");
@@ -12,6 +16,7 @@ int Application::Run(HINSTANCE hInstance) {
     CreateBuffers();
     InitDrawingState();
     CompileShaders();
+    LoadPieceTextures();
 
     ShowWindow(hWindow, SW_SHOW);
     MSG message;
@@ -22,6 +27,22 @@ int Application::Run(HINSTANCE hInstance) {
     DestroyWindow(hWindow);
     UnregisterClass(wClassName, hInstance);
     return 0;
+}
+
+void Application::LoadPieceTextures() {
+
+    CreateTexture(L"bQueen.png", s_QueenTex, s_QueenSRV);
+}
+
+void Application::CreateTexture(const std::wstring& filename, ComPtr<ID3D11Texture2D1>& tex, ComPtr<ID3D11ShaderResourceView>& srv) {
+    ComPtr<ID3D11Resource> texResource;
+    if(FAILED(DirectX::CreateWICTextureFromFile(s_Device.Get(), s_DeviceContext.Get(), filename.c_str(), &texResource, &srv))) {
+        throw std::runtime_error("Failed to read texture file");
+    }
+
+    if(FAILED(texResource->QueryInterface(IID_PPV_ARGS(&tex)))) {
+        throw std::runtime_error("Failed to fetch resource interface");
+    }
 }
 
 void Application::InitGraphicsDevice(const HWND hWnd) {
@@ -99,6 +120,24 @@ void Application::CreateFrameResources() {
     };
 
     s_DeviceContext->RSSetViewports(1, &viewport);
+
+    D3D11_SAMPLER_DESC samplerDesc {
+        D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D11_TEXTURE_ADDRESS_WRAP,
+        D3D11_TEXTURE_ADDRESS_WRAP,
+        D3D11_TEXTURE_ADDRESS_WRAP,
+        0, 1, D3D11_COMPARISON_ALWAYS,
+        1, 1, 1, 1,
+        0, 0
+    };
+
+    if(FAILED(s_Device->CreateSamplerState(&samplerDesc, &s_SamplerState))) {
+        throw std::runtime_error("Failed to create sampler state");
+    }
+
+    ID3D11SamplerState* states[] { s_SamplerState.Get() };
+
+    s_DeviceContext->PSSetSamplers(0, 1, states);
 }
 
 void Application::CreateBuffers() {
@@ -232,6 +271,7 @@ void Application::CompileShaders() {
     ComPtr<ID3DBlob> vertexShaderBlob;
     ComPtr<ID3DBlob> pixelShaderBlob;
 
+    // Board
     if (FAILED(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert", "vs_5_0", 0, 0, &vertexShaderBlob, nullptr))) {
         throw std::runtime_error("Failed to compile vertex shader");
     }
@@ -245,6 +285,23 @@ void Application::CompileShaders() {
     }
 
     if (FAILED(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &s_BoardShaderPixel))) {
+        throw std::runtime_error("Failed to create pixel shader");
+    }
+
+    // Piece
+    if (FAILED(D3DCompileFromFile(L"piece.hlsl", nullptr, nullptr, "vert", "vs_5_0", 0, 0, &vertexShaderBlob, nullptr))) {
+        throw std::runtime_error("Failed to compile vertex shader");
+    }
+
+    if (FAILED(D3DCompileFromFile(L"piece.hlsl", nullptr, nullptr, "frag", "ps_5_0", 0, 0, &pixelShaderBlob, nullptr))) {
+        throw std::runtime_error("Failed to compile pixel shader");
+    }
+
+    if (FAILED(s_Device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderVertex))) {
+        throw std::runtime_error("Failed to create vertex shader");
+    }
+
+    if (FAILED(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderPixel))) {
         throw std::runtime_error("Failed to create pixel shader");
     }
 }
@@ -276,6 +333,27 @@ void Application::Render() {
 
     s_DeviceContext->VSSetShader(s_BoardShaderVertex.Get(), nullptr, 0);
     s_DeviceContext->PSSetShader(s_BoardShaderPixel.Get(), nullptr, 0);
+
+    s_DeviceContext->DrawIndexed(6, 0, 0);
+
+    DirectX::XMStoreFloat4x4(&cbuffer.ModelMatrix, DirectX::XMMatrixTranslation(0, 0, -0.01f));
+
+    if (FAILED(s_DeviceContext->Map(s_ConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource))) {
+        throw std::runtime_error("Failed to map constant buffer");
+    }
+
+    std::memcpy(mappedResource.pData, &cbuffer, sizeof(ConstantBufferData));
+
+    s_DeviceContext->Unmap(s_ConstantBuffer.Get(), 0);
+
+    s_DeviceContext->VSSetConstantBuffers(0, 1, constBuffers);
+
+    s_DeviceContext->VSSetShader(s_PieceShaderVertex.Get(), nullptr, 0);
+    s_DeviceContext->PSSetShader(s_PieceShaderPixel.Get(), nullptr, 0);
+
+    ID3D11ShaderResourceView* SRVs[] { s_QueenSRV.Get() };
+
+    s_DeviceContext->PSSetShaderResources(0, 1, SRVs);
 
     s_DeviceContext->DrawIndexed(6, 0, 0);
 
@@ -347,6 +425,11 @@ ComPtr<ID3D11Buffer> Application::s_VertexBuffer;
 ComPtr<ID3D11Buffer> Application::s_IndexBuffer;
 ComPtr<ID3D11Buffer> Application::s_ConstantBuffer;
 ComPtr<ID3D11RasterizerState2> Application::s_RasterizerState;
+
+ComPtr<ID3D11SamplerState> Application::s_SamplerState;
+
+ComPtr<ID3D11Texture2D1> Application::s_QueenTex;
+ComPtr<ID3D11ShaderResourceView> Application::s_QueenSRV;
 
 ComPtr<ID3D11VertexShader> Application::s_BoardShaderVertex;
 ComPtr<ID3D11PixelShader> Application::s_BoardShaderPixel;

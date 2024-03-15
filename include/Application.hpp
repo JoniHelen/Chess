@@ -14,6 +14,9 @@
 #include <wrl/client.h>
 #include <DirectXMath.h>
 #include <d3dcompiler.h>
+#include <string>
+#include <WICTextureLoader.h>
+#include <memory>
 
 using Microsoft::WRL::ComPtr;
 
@@ -22,6 +25,8 @@ public:
     static int Run(HINSTANCE hInstance);
 
 private:
+    static void LoadPieceTextures();
+    static void CreateTexture(const std::wstring& filename, ComPtr<ID3D11Texture2D1>& tex, ComPtr<ID3D11ShaderResourceView>& srv);
     static void InitGraphicsDevice(HWND hWnd);
     static void CreateFrameResources();
     static void CreateBuffers();
@@ -68,6 +73,12 @@ private:
     static ComPtr<ID3D11Buffer> s_IndexBuffer;
     static ComPtr<ID3D11Buffer> s_ConstantBuffer;
     static ComPtr<ID3D11RasterizerState2> s_RasterizerState;
+
+    static ComPtr<ID3D11SamplerState> s_SamplerState;
+
+    // Texture test
+    static ComPtr<ID3D11Texture2D1> s_QueenTex;
+    static ComPtr<ID3D11ShaderResourceView> s_QueenSRV;
 
     // Shaders
     static ComPtr<ID3D11VertexShader> s_BoardShaderVertex;
