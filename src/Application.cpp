@@ -1,15 +1,15 @@
+#include <pch.hpp>
 #include <Application.hpp>
-#include <stdexcept>
+#include <Piece.hpp>
+#include <Board.hpp>
 
 int Application::Run(HINSTANCE hInstance) {
+    DirectX::ThrowIfFailed(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
 
-    if(FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
-        throw std::runtime_error("CoInit failed");
-    }
+    const auto mouse = std::make_unique<Mouse>();
 
-    const auto wClassName = L"Main";
-    CreateWindowClass(hInstance, wClassName);
-    const HWND hWindow = InitWindow(hInstance, wClassName, L"Chess");
+    CreateWindowClass(hInstance);
+    const HWND hWindow = InitWindow(hInstance, L"Chess");
 
     InitGraphicsDevice(hWindow);
     CreateFrameResources();
@@ -18,6 +18,8 @@ int Application::Run(HINSTANCE hInstance) {
     CompileShaders();
     LoadPieceTextures();
 
+    Board::SetState();
+
     ShowWindow(hWindow, SW_SHOW);
     MSG message;
     while(PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -25,34 +27,24 @@ int Application::Run(HINSTANCE hInstance) {
         DispatchMessage(&message);
     }
     DestroyWindow(hWindow);
-    UnregisterClass(wClassName, hInstance);
+    UnregisterClass(L"Main", hInstance);
     return 0;
 }
 
 void Application::LoadPieceTextures() {
-
-    CreateTexture(L"bQueen.png", s_QueenTex, s_QueenSRV);
+    CreateTexture(L"textures/bQueen.png", s_QueenTex, s_QueenSRV);
+    s_Piece.SetImage(s_QueenSRV);
 }
 
 void Application::CreateTexture(const std::wstring& filename, ComPtr<ID3D11Texture2D1>& tex, ComPtr<ID3D11ShaderResourceView>& srv) {
     ComPtr<ID3D11Resource> texResource;
-    if(FAILED(DirectX::CreateWICTextureFromFile(s_Device.Get(), s_DeviceContext.Get(), filename.c_str(), &texResource, &srv))) {
-        throw std::runtime_error("Failed to read texture file");
-    }
-
-    if(FAILED(texResource->QueryInterface(IID_PPV_ARGS(&tex)))) {
-        throw std::runtime_error("Failed to fetch resource interface");
-    }
+    DirectX::ThrowIfFailed(DirectX::CreateWICTextureFromFile(s_Device.Get(), s_DeviceContext.Get(), filename.c_str(), &texResource, &srv));
+    DirectX::ThrowIfFailed(texResource.As(&tex));
 }
 
 void Application::InitGraphicsDevice(const HWND hWnd) {
-    if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&s_Factory)))) {
-        throw std::runtime_error("Failed to create DXGI Factory.");
-    }
-
-    if (FAILED(s_Factory->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&s_Adapter)))) {
-        throw std::runtime_error("Failed to create DXGI Adapter.");
-    }
+    DirectX::ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&s_Factory)));
+    DirectX::ThrowIfFailed(s_Factory->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&s_Adapter)));
 
     const DXGI_SWAP_CHAIN_DESC scDesc {
         {
@@ -72,199 +64,126 @@ void Application::InitGraphicsDevice(const HWND hWnd) {
     ComPtr<ID3D11DeviceContext> t_DeviceContext;
     ComPtr<IDXGISwapChain> t_SwapChain;
 
-    if (FAILED(D3D11CreateDeviceAndSwapChain(s_Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-        D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, FeatureLevels, 2, D3D11_SDK_VERSION, &scDesc, &t_SwapChain, &t_Device, nullptr, &t_DeviceContext))) {
-        throw std::runtime_error("D3D11 Device and SwapChain creation failed.");
-    }
+    DirectX::ThrowIfFailed(D3D11CreateDeviceAndSwapChain(s_Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
+        D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, FeatureLevels, 2,
+        D3D11_SDK_VERSION, &scDesc, &t_SwapChain, &t_Device, nullptr, &t_DeviceContext));
 
-    if (FAILED(t_Device->QueryInterface(IID_PPV_ARGS(&s_Device)))) {throw std::runtime_error("Device query failed."); }
-    if (FAILED(t_DeviceContext->QueryInterface(IID_PPV_ARGS(&s_DeviceContext)))) { throw std::runtime_error("Device context query failed."); }
-    if (FAILED(t_SwapChain->QueryInterface(IID_PPV_ARGS(&s_SwapChain)))) { throw std::runtime_error("SwapChain query failed."); }
+    DirectX::ThrowIfFailed(t_Device.As(&s_Device));
+    DirectX::ThrowIfFailed(t_DeviceContext.As(&s_DeviceContext));
+    DirectX::ThrowIfFailed(t_SwapChain.As(&s_SwapChain));
 }
 
 void Application::CreateFrameResources() {
     ComPtr<ID3D11Texture2D1> BackbufferTex;
-    if (FAILED(s_SwapChain->GetBuffer(0, IID_PPV_ARGS(&BackbufferTex)))) {
-        throw std::runtime_error("Failed to fetch backbuffer.");
-    }
+    DirectX::ThrowIfFailed(s_SwapChain->GetBuffer(0, IID_PPV_ARGS(&BackbufferTex)));
+    DirectX::ThrowIfFailed(s_Device->CreateRenderTargetView(BackbufferTex.Get(), nullptr, &s_RTV));
 
-    if (FAILED(s_Device->CreateRenderTargetView(BackbufferTex.Get(), nullptr, &s_RTV))) {
-        throw std::runtime_error("Failed to create RTV");
-    }
-
-    D3D11_TEXTURE2D_DESC1 depthTextureDesc {
+    constexpr D3D11_TEXTURE2D_DESC1 depthTextureDesc {
         1280, 720, 1, 1, DXGI_FORMAT_D24_UNORM_S8_UINT,
         { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_DEPTH_STENCIL,
         0, 0, D3D11_TEXTURE_LAYOUT_UNDEFINED
     };
 
-    if (FAILED(s_Device->CreateTexture2D1(&depthTextureDesc, nullptr, &s_DepthTexture))) {
-        throw std::runtime_error("Failed to create depth texture");
-    }
+    DirectX::ThrowIfFailed(s_Device->CreateTexture2D1(&depthTextureDesc, nullptr, &s_DepthTexture));
 
-    D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc {
+    constexpr D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc {
         DXGI_FORMAT_D24_UNORM_S8_UINT,
         D3D11_DSV_DIMENSION_TEXTURE2D
     };
 
-    if (FAILED(s_Device->CreateDepthStencilView(s_DepthTexture.Get(), &depthStencilViewDesc, &s_DSV))) {
-        throw std::runtime_error("Failed to create Depth Stencil View");
-    }
+    DirectX::ThrowIfFailed(s_Device->CreateDepthStencilView(s_DepthTexture.Get(), &depthStencilViewDesc, &s_DSV));
+    s_DeviceContext->OMSetRenderTargets(1, s_RTV.GetAddressOf(), s_DSV.Get());
 
-    ID3D11RenderTargetView* RTVs[] { s_RTV.Get() };
-
-    s_DeviceContext->OMSetRenderTargets(1, RTVs, s_DSV.Get());
-
-    D3D11_VIEWPORT viewport = {
-        0, 0, 1280, 720, 0, 1
-    };
-
+    constexpr D3D11_VIEWPORT viewport { 0, 0, 1280, 720, 0, 1 };
     s_DeviceContext->RSSetViewports(1, &viewport);
 
-    D3D11_SAMPLER_DESC samplerDesc {
-        D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-        D3D11_TEXTURE_ADDRESS_WRAP,
-        D3D11_TEXTURE_ADDRESS_WRAP,
-        D3D11_TEXTURE_ADDRESS_WRAP,
-        0, 1, D3D11_COMPARISON_ALWAYS,
-        1, 1, 1, 1,
-        0, 0
+    constexpr D3D11_SAMPLER_DESC samplerDesc {
+        D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP,
+        D3D11_TEXTURE_ADDRESS_WRAP, 0, 1, D3D11_COMPARISON_ALWAYS,
+        1, 1, 1, 1, 0, 0
     };
 
-    if(FAILED(s_Device->CreateSamplerState(&samplerDesc, &s_SamplerState))) {
-        throw std::runtime_error("Failed to create sampler state");
-    }
-
-    ID3D11SamplerState* states[] { s_SamplerState.Get() };
-
-    s_DeviceContext->PSSetSamplers(0, 1, states);
+    DirectX::ThrowIfFailed(s_Device->CreateSamplerState(&samplerDesc, &s_SamplerState));
+    s_DeviceContext->PSSetSamplers(0, 1, s_SamplerState.GetAddressOf());
 }
 
 void Application::CreateBuffers() {
-    D3D11_BUFFER_DESC vertexBufferDesc {
-        sizeof(quad),
-        D3D11_USAGE_DEFAULT,
-        D3D11_BIND_VERTEX_BUFFER,
+    s_DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    constexpr D3D11_BUFFER_DESC vertexBufferDesc {
+        sizeof(quad), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER,
         0, 0, 0
     };
-
-    D3D11_SUBRESOURCE_DATA vertexData {
-        quad, 0, 0
-    };
-
-    if (FAILED(s_Device->CreateBuffer(&vertexBufferDesc, &vertexData, &s_VertexBuffer))) {
-        throw std::runtime_error("Failed to create Vertex Buffer");
-    }
-
-    D3D11_BUFFER_DESC indexBufferDesc {
-        sizeof(indices),
-        D3D11_USAGE_DEFAULT,
-        D3D11_BIND_INDEX_BUFFER,
-        0, 0, 0
-    };
-
-    D3D11_SUBRESOURCE_DATA indexData {
-        indices, 0, 0
-    };
-
-    if (FAILED(s_Device->CreateBuffer(&indexBufferDesc, &indexData, &s_IndexBuffer))) {
-        throw std::runtime_error("Failed to create Index Buffer");
-    }
-
-    D3D11_BUFFER_DESC constantBufferDesc = {
-        sizeof(ConstantBufferData),
-        D3D11_USAGE_DYNAMIC,
-        D3D11_BIND_CONSTANT_BUFFER,
-        D3D11_CPU_ACCESS_WRITE, 0, 0
-    };
-
-    if (FAILED(s_Device->CreateBuffer(&constantBufferDesc, nullptr, &s_ConstantBuffer))) {
-        throw std::runtime_error("Failed to create Constant Buffer");
-    }
-
+    constexpr D3D11_SUBRESOURCE_DATA vertexData { quad, 0, 0 };
+    DirectX::ThrowIfFailed(s_Device->CreateBuffer(&vertexBufferDesc, &vertexData, &s_VertexBuffer));
     constexpr unsigned stride = sizeof(Vertex);
     constexpr unsigned offset = 0;
-    ID3D11Buffer* vBuffers[] { s_VertexBuffer.Get() };
-    s_DeviceContext->IASetVertexBuffers(0, 1, vBuffers, &stride, &offset);
+    s_DeviceContext->IASetVertexBuffers(0, 1, s_VertexBuffer.GetAddressOf(), &stride, &offset);
+
+    constexpr D3D11_BUFFER_DESC indexBufferDesc {
+        sizeof(indices), D3D11_USAGE_DEFAULT, D3D11_BIND_INDEX_BUFFER,
+        0, 0, 0
+    };
+    constexpr D3D11_SUBRESOURCE_DATA indexData { indices, 0, 0 };
+    DirectX::ThrowIfFailed(s_Device->CreateBuffer(&indexBufferDesc, &indexData, &s_IndexBuffer));
+
+    constexpr D3D11_BUFFER_DESC constantBufferDesc = {
+        sizeof(ConstantBufferData), D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER,
+        D3D11_CPU_ACCESS_WRITE, 0, 0
+    };
+    DirectX::ThrowIfFailed(s_Device->CreateBuffer(&constantBufferDesc, nullptr, &s_ConstantBuffer));
     s_DeviceContext->IASetIndexBuffer(s_IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-    s_DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void Application::InitDrawingState() {
     ComPtr<ID3D11InputLayout> InputLayout;
-    D3D11_INPUT_ELEMENT_DESC polygonLayout[2];
-
-    polygonLayout[0].SemanticName = "POSITION";
-    polygonLayout[0].SemanticIndex = 0;
-    polygonLayout[0].Format = DXGI_FORMAT_R32G32_FLOAT;
-    polygonLayout[0].InputSlot = 0;
-    polygonLayout[0].AlignedByteOffset = 0;
-    polygonLayout[0].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    polygonLayout[0].InstanceDataStepRate = 0;
-
-    polygonLayout[1].SemanticName = "TEXCOORD";
-    polygonLayout[1].SemanticIndex = 0;
-    polygonLayout[1].Format = DXGI_FORMAT_R32G32_FLOAT;
-    polygonLayout[1].InputSlot = 0;
-    polygonLayout[1].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
-    polygonLayout[1].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    polygonLayout[1].InstanceDataStepRate = 0;
+    constexpr D3D11_INPUT_ELEMENT_DESC polygonLayout[2] { {
+            "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+            0, D3D11_INPUT_PER_VERTEX_DATA, 0
+        }, {
+            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+            D3D11_APPEND_ALIGNED_ELEMENT,D3D11_INPUT_PER_VERTEX_DATA, 0
+        }
+    };
 
     ComPtr<ID3DBlob> inputShaderBlob;
-
-    if (FAILED(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert", "vs_5_0", 0, 0, &inputShaderBlob, nullptr))) {
-        throw std::runtime_error("Failed to compile vertex shader for input layout");
-    }
-
-    if (FAILED(s_Device->CreateInputLayout(polygonLayout, 2, inputShaderBlob->GetBufferPointer(), inputShaderBlob->GetBufferSize(), &InputLayout))) {
-        throw std::runtime_error("Failed to create input layout");
-    }
-
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert",
+        "vs_5_0", 0, 0, &inputShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(s_Device->CreateInputLayout(polygonLayout, 2,
+        inputShaderBlob->GetBufferPointer(), inputShaderBlob->GetBufferSize(), &InputLayout));
     s_DeviceContext->IASetInputLayout(InputLayout.Get());
 
-    D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
-    depthStencilDesc.DepthEnable = true;
-    depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-    depthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
-    depthStencilDesc.StencilEnable = true;
-    depthStencilDesc.StencilReadMask = 0xFF;
-    depthStencilDesc.StencilWriteMask = 0xFF;
-
-    depthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-    depthStencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
-    depthStencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-    depthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-
-    depthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-    depthStencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
-    depthStencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-    depthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-
-    if (FAILED(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilState))) {
-        throw std::runtime_error("Failed to create depth stencil state");
-    }
-
+    constexpr D3D11_DEPTH_STENCIL_DESC depthStencilDesc {
+        true, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_LESS,
+        false, 0xFF, 0xFF,
+        { D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_INCR,
+            D3D11_STENCIL_OP_KEEP, D3D11_COMPARISON_ALWAYS
+        }, { D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_INCR,
+            D3D11_STENCIL_OP_KEEP, D3D11_COMPARISON_ALWAYS
+        }
+    };
+    DirectX::ThrowIfFailed(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilState));
     s_DeviceContext->OMSetDepthStencilState(s_DepthStencilState.Get(), 1);
 
-    D3D11_RASTERIZER_DESC2 rasterDesc;
-    rasterDesc.AntialiasedLineEnable = false;
-    rasterDesc.CullMode = D3D11_CULL_BACK;
-    rasterDesc.DepthBias = 0;
-    rasterDesc.DepthBiasClamp = 0.0f;
-    rasterDesc.DepthClipEnable = true;
-    rasterDesc.FillMode = D3D11_FILL_SOLID;
-    rasterDesc.FrontCounterClockwise = true;
-    rasterDesc.MultisampleEnable = false;
-    rasterDesc.ScissorEnable = false;
-    rasterDesc.SlopeScaledDepthBias = 0.0f;
-    rasterDesc.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-    rasterDesc.ForcedSampleCount = 0;
-
-    if (FAILED(s_Device->CreateRasterizerState2(&rasterDesc, &s_RasterizerState))) {
-        throw std::runtime_error("Failed to create raster state");
-    }
-
+    constexpr D3D11_RASTERIZER_DESC2 rasterDesc {
+        D3D11_FILL_SOLID, D3D11_CULL_BACK, true, 0, 0.0f,
+        0.0f, true, false, false, false,
+        0, D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF
+    };
+    DirectX::ThrowIfFailed(s_Device->CreateRasterizerState2(&rasterDesc, &s_RasterizerState));
     s_DeviceContext->RSSetState(s_RasterizerState.Get());
+
+    constexpr D3D11_BLEND_DESC1 blendDesc {
+        false, false,
+        { {
+                true, false, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA,
+                D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA,
+                D3D11_BLEND_OP_ADD, D3D11_LOGIC_OP_NOOP, D3D11_COLOR_WRITE_ENABLE_ALL
+            }
+        }
+    };
+    DirectX::ThrowIfFailed(s_Device->CreateBlendState1(&blendDesc, &s_BlendState));
+    s_DeviceContext->OMSetBlendState(s_BlendState.Get(), nullptr, 0xffffffff);
 }
 
 void Application::CompileShaders() {
@@ -272,95 +191,104 @@ void Application::CompileShaders() {
     ComPtr<ID3DBlob> pixelShaderBlob;
 
     // Board
-    if (FAILED(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert", "vs_5_0", 0, 0, &vertexShaderBlob, nullptr))) {
-        throw std::runtime_error("Failed to compile vertex shader");
-    }
-
-    if (FAILED(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "frag", "ps_5_0", 0, 0, &pixelShaderBlob, nullptr))) {
-        throw std::runtime_error("Failed to compile pixel shader");
-    }
-
-    if (FAILED(s_Device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), nullptr, &s_BoardShaderVertex))) {
-        throw std::runtime_error("Failed to create vertex shader");
-    }
-
-    if (FAILED(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &s_BoardShaderPixel))) {
-        throw std::runtime_error("Failed to create pixel shader");
-    }
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert",
+        "vs_5_0", 0, 0, &vertexShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "frag",
+        "ps_5_0", 0, 0, &pixelShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(s_Device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(),
+        vertexShaderBlob->GetBufferSize(), nullptr, &s_BoardShaderVertex));
+    DirectX::ThrowIfFailed(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(),
+        pixelShaderBlob->GetBufferSize(), nullptr, &s_BoardShaderPixel));
 
     // Piece
-    if (FAILED(D3DCompileFromFile(L"piece.hlsl", nullptr, nullptr, "vert", "vs_5_0", 0, 0, &vertexShaderBlob, nullptr))) {
-        throw std::runtime_error("Failed to compile vertex shader");
-    }
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"piece.hlsl", nullptr, nullptr, "vert",
+        "vs_5_0", 0, 0, &vertexShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"piece.hlsl", nullptr, nullptr, "frag",
+        "ps_5_0", 0, 0, &pixelShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(s_Device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(),
+            vertexShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderVertex));
+    DirectX::ThrowIfFailed(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(),
+        pixelShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderPixel));
+}
 
-    if (FAILED(D3DCompileFromFile(L"piece.hlsl", nullptr, nullptr, "frag", "ps_5_0", 0, 0, &pixelShaderBlob, nullptr))) {
-        throw std::runtime_error("Failed to compile pixel shader");
-    }
+void Application::DrawChessPiece(const Piece &piece, ConstantBufferData &cbuffer) {
+    cbuffer.ModelMatrix = piece.GetModelMatrix();
+    UpdateConstantBuffer(cbuffer);
+    s_DeviceContext->PSSetShaderResources(0, 1, piece.GetImage());
+    s_DeviceContext->DrawIndexed(6, 0, 0);
+}
 
-    if (FAILED(s_Device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderVertex))) {
-        throw std::runtime_error("Failed to create vertex shader");
-    }
+void Application::UpdateConstantBuffer(const ConstantBufferData &cbuffer) {
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    DirectX::ThrowIfFailed(s_DeviceContext->Map(s_ConstantBuffer.Get(), 0,
+        D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+    std::memcpy(mappedResource.pData, &cbuffer, sizeof(ConstantBufferData));
+    s_DeviceContext->Unmap(s_ConstantBuffer.Get(), 0);
+    s_DeviceContext->VSSetConstantBuffers(0, 1, s_ConstantBuffer.GetAddressOf());
+}
 
-    if (FAILED(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderPixel))) {
-        throw std::runtime_error("Failed to create pixel shader");
-    }
+Vector2 Application::ScreenToWorldPoint(const Vector2 &screen, const ConstantBufferData &cbuffer) {
+    const auto ndc = (Vector2(screen.x / 1280.0f, (720.0f - screen.y) / 720.0f) - Vector2(0.5f, 0.5f)) * 2;
+    return Vector2::Transform(Vector2::Transform(ndc, cbuffer.ProjectionMatrix.Invert()), cbuffer.ViewMatrix.Invert());
+}
+
+Vector2 Application::ScreenToWorldPoint(const int &sx, const int &sy, const ConstantBufferData &cbuffer) {
+    return ScreenToWorldPoint(Vector2(static_cast<float>(sx), static_cast<float>(sy)), cbuffer);
 }
 
 void Application::Render() {
-    ConstantBufferData cbuffer {};
-    DirectX::XMStoreFloat4x4(&cbuffer.ModelMatrix, DirectX::XMMatrixScaling(8, 8, 1));
-    DirectX::XMStoreFloat4x4(&cbuffer.ViewMatrix, DirectX::XMMatrixInverse(nullptr, DirectX::XMMatrixTranslation(4, 4, 0)));
-    constexpr float aspect = 1920.0f / 1080.0f;
-    DirectX::XMStoreFloat4x4(&cbuffer.ProjectionMatrix, DirectX::XMMatrixOrthographicLH(9.0f * aspect, 9.0f, -1, 1));
 
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-    if (FAILED(s_DeviceContext->Map(s_ConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource))) {
-        throw std::runtime_error("Failed to map constant buffer");
+    ConstantBufferData cbuffer {
+        Matrix::CreateScale(8, 8, 1),
+        Matrix::CreateTranslation(4, 4, 0).Invert(),
+        Matrix::CreateOrthographic(9.0f * 1920.0f / 1080.0f, 9.0f, -1, 1)
+    };
+
+    UpdateConstantBuffer(cbuffer);
+    const auto mouseState = Mouse::Get().GetState();
+    s_MouseState.Update(mouseState);
+
+    if(s_MouseState.leftButton == Mouse::ButtonStateTracker::ButtonState::PRESSED) {
+        if(s_Piece.PointInside(ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer))) {
+            s_SelectedPiece = &s_Piece;
+        }
     }
 
-    std::memcpy(mappedResource.pData, &cbuffer, sizeof(ConstantBufferData));
+    if(s_MouseState.leftButton == Mouse::ButtonStateTracker::ButtonState::RELEASED) {
+        auto pos = ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer);
+        pos.x = floor(pos.x);
+        pos.y = floor(pos.y);
+        if(s_SelectedPiece) {
+            s_SelectedPiece->SetPosition(pos);
+            s_SelectedPiece = nullptr;
+        }
+    }
 
-    s_DeviceContext->Unmap(s_ConstantBuffer.Get(), 0);
+    if(s_SelectedPiece) {
+        s_SelectedPiece->SetPosition(ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer) - Vector2(0.5f, 0.5f));
+    }
 
-    ID3D11Buffer* constBuffers[] { s_ConstantBuffer.Get() };
-
-    s_DeviceContext->VSSetConstantBuffers(0, 1, constBuffers);
-
-    constexpr float color[4] = { 0.2f, 0.2f, 0.2f, 1.0f };
+    // Clear RT
+    constexpr float color[4] { 0.2f, 0.2f, 0.2f, 1.0f };
     s_DeviceContext->ClearRenderTargetView(s_RTV.Get(), color);
-
     s_DeviceContext->ClearDepthStencilView(s_DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
+    // Draw board
     s_DeviceContext->VSSetShader(s_BoardShaderVertex.Get(), nullptr, 0);
     s_DeviceContext->PSSetShader(s_BoardShaderPixel.Get(), nullptr, 0);
 
     s_DeviceContext->DrawIndexed(6, 0, 0);
 
-    DirectX::XMStoreFloat4x4(&cbuffer.ModelMatrix, DirectX::XMMatrixTranslation(0, 0, -0.01f));
-
-    if (FAILED(s_DeviceContext->Map(s_ConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource))) {
-        throw std::runtime_error("Failed to map constant buffer");
-    }
-
-    std::memcpy(mappedResource.pData, &cbuffer, sizeof(ConstantBufferData));
-
-    s_DeviceContext->Unmap(s_ConstantBuffer.Get(), 0);
-
-    s_DeviceContext->VSSetConstantBuffers(0, 1, constBuffers);
-
+    // Draw pieces
     s_DeviceContext->VSSetShader(s_PieceShaderVertex.Get(), nullptr, 0);
     s_DeviceContext->PSSetShader(s_PieceShaderPixel.Get(), nullptr, 0);
 
-    ID3D11ShaderResourceView* SRVs[] { s_QueenSRV.Get() };
-
-    s_DeviceContext->PSSetShaderResources(0, 1, SRVs);
-
-    s_DeviceContext->DrawIndexed(6, 0, 0);
+    DrawChessPiece(s_Piece, cbuffer);
 
     s_SwapChain->Present(0, 0);
 }
 
-HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR className, const LPCWSTR windowName) {
+HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR windowName) {
     RECT wndRect { 0, 0, 1280, 720 };
     AdjustWindowRect(&wndRect, WS_OVERLAPPEDWINDOW, FALSE);
 
@@ -375,21 +303,21 @@ HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR className,
     const LONG hmh = (mInfo.rcMonitor.bottom - mInfo.rcMonitor.top) / 2;
 
     return CreateWindowEx(
-        0, className, windowName,
+        0, L"Main", windowName,
         WS_OVERLAPPEDWINDOW,
         hmw - w / 2, hmh - h / 2, w, h,
         nullptr, nullptr, hInstance, nullptr
     );
 }
 
-void Application::CreateWindowClass(const HINSTANCE hInstance, const LPCWSTR name) {
+void Application::CreateWindowClass(const HINSTANCE hInstance) {
     WNDCLASSEX wndClass = {
         sizeof(WNDCLASSEX),
         CS_HREDRAW | CS_VREDRAW,
         WindowProcedure,
         0, 0, hInstance, LoadIcon(nullptr, IDI_WINLOGO),
         LoadCursor(nullptr, IDC_ARROW), nullptr,
-        nullptr, name, nullptr
+        nullptr, L"Main", nullptr
     };
 
     RegisterClassEx(&wndClass);
@@ -397,42 +325,37 @@ void Application::CreateWindowClass(const HINSTANCE hInstance, const LPCWSTR nam
 
 LRESULT Application::WindowProcedure(const HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     switch(uMsg) {
-        case WM_DESTROY: {
+        case WM_DESTROY:
             PostQuitMessage(0);
-            return TRUE;
-        }
-        case WM_PAINT: {
+            return 0;
+
+        case WM_PAINT:
             Render();
-            return TRUE;
-        }
+            return 0;
+
+        case WM_ACTIVATE:
+        case WM_ACTIVATEAPP:
+        case WM_INPUT:
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+        case WM_MOUSEWHEEL:
+        case WM_XBUTTONDOWN:
+        case WM_XBUTTONUP:
+        case WM_MOUSEHOVER:
+            Mouse::ProcessMessage(uMsg, wParam, lParam);
+            return 0;
+
+        case WM_MOUSEACTIVATE:
+            // When you click to activate the window, we want Mouse to ignore that event.
+            return MA_ACTIVATEANDEAT;
+
         default: {
             return DefWindowProc(hWnd, uMsg, wParam, lParam);
         }
     }
 }
-
-// Static members
-ComPtr<IDXGIFactory7> Application::s_Factory;
-ComPtr<IDXGIAdapter4> Application::s_Adapter;
-ComPtr<ID3D11Device5> Application::s_Device;
-ComPtr<ID3D11DeviceContext4> Application::s_DeviceContext;
-ComPtr<IDXGISwapChain4> Application::s_SwapChain;
-ComPtr<ID3D11RenderTargetView> Application::s_RTV;
-ComPtr<ID3D11Texture2D1> Application::s_DepthTexture;
-ComPtr<ID3D11DepthStencilView> Application::s_DSV;
-ComPtr<ID3D11DepthStencilState> Application::s_DepthStencilState;
-ComPtr<ID3D11Buffer> Application::s_VertexBuffer;
-ComPtr<ID3D11Buffer> Application::s_IndexBuffer;
-ComPtr<ID3D11Buffer> Application::s_ConstantBuffer;
-ComPtr<ID3D11RasterizerState2> Application::s_RasterizerState;
-
-ComPtr<ID3D11SamplerState> Application::s_SamplerState;
-
-ComPtr<ID3D11Texture2D1> Application::s_QueenTex;
-ComPtr<ID3D11ShaderResourceView> Application::s_QueenSRV;
-
-ComPtr<ID3D11VertexShader> Application::s_BoardShaderVertex;
-ComPtr<ID3D11PixelShader> Application::s_BoardShaderPixel;
-
-ComPtr<ID3D11VertexShader> Application::s_PieceShaderVertex;
-ComPtr<ID3D11PixelShader> Application::s_PieceShaderPixel;

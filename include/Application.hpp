@@ -1,30 +1,24 @@
 #pragma once
+#include "Piece.hpp"
 
-#ifndef UNICODE
-    #define UNICODE
-#endif
-
-#ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <Windows.h>
-#include <dxgi1_6.h>
-#include <d3d11_4.h>
-#include <wrl/client.h>
-#include <DirectXMath.h>
-#include <d3dcompiler.h>
-#include <string>
-#include <WICTextureLoader.h>
-#include <memory>
-
-using Microsoft::WRL::ComPtr;
+class Piece;
 
 class Application final {
 public:
     static int Run(HINSTANCE hInstance);
 
 private:
+    struct Vertex final {
+        Vector2 position;
+        Vector2 uv;
+    };
+
+    struct ConstantBufferData final {
+        Matrix ModelMatrix;
+        Matrix ViewMatrix;
+        Matrix ProjectionMatrix;
+    };
+
     static void LoadPieceTextures();
     static void CreateTexture(const std::wstring& filename, ComPtr<ID3D11Texture2D1>& tex, ComPtr<ID3D11ShaderResourceView>& srv);
     static void InitGraphicsDevice(HWND hWnd);
@@ -32,21 +26,16 @@ private:
     static void CreateBuffers();
     static void InitDrawingState();
     static void CompileShaders();
+    static void DrawChessPiece(const Piece& piece, ConstantBufferData& cbuffer);
+    static void UpdateConstantBuffer(const ConstantBufferData& cbuffer);
+    static Vector2 ScreenToWorldPoint(const Vector2& screen, const ConstantBufferData& cbuffer);
+    static Vector2 ScreenToWorldPoint(const int& sx, const int& sy, const ConstantBufferData& cbuffer);
     static void Render();
-    static HWND InitWindow(HINSTANCE hInstance, LPCWSTR className, LPCWSTR windowName);
-    static void CreateWindowClass(HINSTANCE hInstance, LPCWSTR name);
+    static HWND InitWindow(HINSTANCE hInstance, LPCWSTR windowName);
+    static void CreateWindowClass(HINSTANCE hInstance);
     static LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-    struct Vertex {
-        DirectX::XMFLOAT2 position;
-        DirectX::XMFLOAT2 uv;
-    };
-
-    struct ConstantBufferData {
-        DirectX::XMFLOAT4X4 ModelMatrix;
-        DirectX::XMFLOAT4X4 ViewMatrix;
-        DirectX::XMFLOAT4X4 ProjectionMatrix;
-    };
+    inline static Mouse::ButtonStateTracker s_MouseState;
 
     static constexpr Vertex quad[4u] {
         { { 0.0f, 0.0f }, { 0.0f, 0.0f } },
@@ -60,30 +49,32 @@ private:
     };
 
     // Rendering components
-    static ComPtr<IDXGIFactory7> s_Factory;
-    static ComPtr<IDXGIAdapter4> s_Adapter;
-    static ComPtr<ID3D11Device5> s_Device;
-    static ComPtr<ID3D11DeviceContext4> s_DeviceContext;
-    static ComPtr<IDXGISwapChain4> s_SwapChain;
-    static ComPtr<ID3D11RenderTargetView> s_RTV;
-    static ComPtr<ID3D11Texture2D1> s_DepthTexture;
-    static ComPtr<ID3D11DepthStencilView> s_DSV;
-    static ComPtr<ID3D11DepthStencilState> s_DepthStencilState;
-    static ComPtr<ID3D11Buffer> s_VertexBuffer;
-    static ComPtr<ID3D11Buffer> s_IndexBuffer;
-    static ComPtr<ID3D11Buffer> s_ConstantBuffer;
-    static ComPtr<ID3D11RasterizerState2> s_RasterizerState;
-
-    static ComPtr<ID3D11SamplerState> s_SamplerState;
+    inline static ComPtr<IDXGIFactory7> s_Factory;
+    inline static ComPtr<IDXGIAdapter4> s_Adapter;
+    inline static ComPtr<ID3D11Device5> s_Device;
+    inline static ComPtr<ID3D11DeviceContext4> s_DeviceContext;
+    inline static ComPtr<IDXGISwapChain4> s_SwapChain;
+    inline static ComPtr<ID3D11RenderTargetView> s_RTV;
+    inline static ComPtr<ID3D11Texture2D1> s_DepthTexture;
+    inline static ComPtr<ID3D11DepthStencilView> s_DSV;
+    inline static ComPtr<ID3D11DepthStencilState> s_DepthStencilState;
+    inline static ComPtr<ID3D11Buffer> s_VertexBuffer;
+    inline static ComPtr<ID3D11Buffer> s_IndexBuffer;
+    inline static ComPtr<ID3D11Buffer> s_ConstantBuffer;
+    inline static ComPtr<ID3D11RasterizerState2> s_RasterizerState;
+    inline static ComPtr<ID3D11BlendState1> s_BlendState;
+    inline static ComPtr<ID3D11SamplerState> s_SamplerState;
 
     // Texture test
-    static ComPtr<ID3D11Texture2D1> s_QueenTex;
-    static ComPtr<ID3D11ShaderResourceView> s_QueenSRV;
+    inline static ComPtr<ID3D11Texture2D1> s_QueenTex;
+    inline static ComPtr<ID3D11ShaderResourceView> s_QueenSRV;
+    inline static Piece s_Piece = Piece(Piece::Type::Queen);
+    inline static Piece* s_SelectedPiece;
 
     // Shaders
-    static ComPtr<ID3D11VertexShader> s_BoardShaderVertex;
-    static ComPtr<ID3D11PixelShader> s_BoardShaderPixel;
+    inline static ComPtr<ID3D11VertexShader> s_BoardShaderVertex;
+    inline static ComPtr<ID3D11PixelShader> s_BoardShaderPixel;
 
-    static ComPtr<ID3D11VertexShader> s_PieceShaderVertex;
-    static ComPtr<ID3D11PixelShader> s_PieceShaderPixel;
+    inline static ComPtr<ID3D11VertexShader> s_PieceShaderVertex;
+    inline static ComPtr<ID3D11PixelShader> s_PieceShaderPixel;
 };

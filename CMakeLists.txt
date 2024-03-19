@@ -17,15 +17,28 @@ add_executable(Chess WIN32
         src/main.cpp
         include/Application.hpp
         src/Application.cpp
+        include/Piece.hpp
+        src/Piece.cpp
+        include/Board.hpp
+        src/Board.cpp
+        include/pch.hpp
+        src/pch.cpp
 )
+
+target_precompile_headers(Chess PRIVATE include/pch.hpp)
 
 target_include_directories(Chess PRIVATE
         include
         ${DirectXTK_SOURCE_DIR}/Inc
+        ${DirectXTK_SOURCE_DIR}/Src
 )
 
 target_link_libraries(Chess d3d11 dxgi d3dcompiler DirectXTK)
 
 add_custom_command(TARGET Chess POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_custom_command(TARGET Chess POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ChessPieces ${CMAKE_CURRENT_BINARY_DIR}/textures
 )

@@ -30,5 +30,5 @@ SamplerState mainTexSampler : register(s0);
 
 float4 frag(VertexOutput input) : SV_TARGET
 {
-    return mainTex.Sample(mainTexSampler, input.uv);
+    return mainTex.Sample(mainTexSampler, input.uv * float2(1, -1));
 }
