@@ -23,6 +23,8 @@ add_executable(Chess WIN32
         src/Board.cpp
         include/pch.hpp
         src/pch.cpp
+        include/Texture2D.hpp
+        src/Texture2D.cpp
 )
 
 target_precompile_headers(Chess PRIVATE include/pch.hpp)

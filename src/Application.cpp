@@ -3,6 +3,9 @@
 #include <Piece.hpp>
 #include <Board.hpp>
 
+constexpr uint32_t Width = 1920u;
+constexpr uint32_t Height = 1080u;
+
 int Application::Run(HINSTANCE hInstance) {
     DirectX::ThrowIfFailed(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
 
@@ -18,7 +21,7 @@ int Application::Run(HINSTANCE hInstance) {
     CompileShaders();
     LoadPieceTextures();
 
-    Board::SetState();
+    Board::SetState("1n2q3/1PBPpbK1/1N1pR1N1/2p3pP/rpPP2Bn/p6P/4pQPb/1k6 w - - 0 1");
 
     ShowWindow(hWindow, SW_SHOW);
     MSG message;
@@ -32,14 +35,25 @@ int Application::Run(HINSTANCE hInstance) {
 }
 
 void Application::LoadPieceTextures() {
-    CreateTexture(L"textures/bQueen.png", s_QueenTex, s_QueenSRV);
-    s_Piece.SetImage(s_QueenSRV);
+    s_PieceTextures.insert({ PieceFlag::Pawn | PieceFlag::Black, CreateTexture(L"textures/bPawn.png") });
+    s_PieceTextures.insert({ PieceFlag::Rook | PieceFlag::Black, CreateTexture(L"textures/bRook.png") });
+    s_PieceTextures.insert({ PieceFlag::Knight | PieceFlag::Black, CreateTexture(L"textures/bKnight.png") });
+    s_PieceTextures.insert({ PieceFlag::Bishop | PieceFlag::Black, CreateTexture(L"textures/bBishop.png") });
+    s_PieceTextures.insert({ PieceFlag::King | PieceFlag::Black, CreateTexture(L"textures/bKing.png") });
+    s_PieceTextures.insert({ PieceFlag::Queen | PieceFlag::Black, CreateTexture(L"textures/bQueen.png") });
+    s_PieceTextures.insert({ PieceFlag::Pawn | PieceFlag::White, CreateTexture(L"textures/wPawn.png") });
+    s_PieceTextures.insert({ PieceFlag::Rook | PieceFlag::White, CreateTexture(L"textures/wRook.png") });
+    s_PieceTextures.insert({ PieceFlag::Knight | PieceFlag::White, CreateTexture(L"textures/wKnight.png") });
+    s_PieceTextures.insert({ PieceFlag::Bishop | PieceFlag::White, CreateTexture(L"textures/wBishop.png") });
+    s_PieceTextures.insert({ PieceFlag::King | PieceFlag::White, CreateTexture(L"textures/wKing.png") });
+    s_PieceTextures.insert({ PieceFlag::Queen | PieceFlag::White, CreateTexture(L"textures/wQueen.png") });
 }
 
-void Application::CreateTexture(const std::wstring& filename, ComPtr<ID3D11Texture2D1>& tex, ComPtr<ID3D11ShaderResourceView>& srv) {
-    ComPtr<ID3D11Resource> texResource;
-    DirectX::ThrowIfFailed(DirectX::CreateWICTextureFromFile(s_Device.Get(), s_DeviceContext.Get(), filename.c_str(), &texResource, &srv));
-    DirectX::ThrowIfFailed(texResource.As(&tex));
+Texture2D Application::CreateTexture(const std::wstring& filename) {
+    Texture2D tex;
+    DirectX::ThrowIfFailed(DirectX::CreateWICTextureFromFile(s_Device.Get(), s_DeviceContext.Get(),
+        filename.c_str(), &tex.Resource(), &tex.ResourceView()));
+    return tex;
 }
 
 void Application::InitGraphicsDevice(const HWND hWnd) {
@@ -48,7 +62,7 @@ void Application::InitGraphicsDevice(const HWND hWnd) {
 
     const DXGI_SWAP_CHAIN_DESC scDesc {
         {
-            1280, 720, { 0, 1 }, DXGI_FORMAT_R8G8B8A8_UNORM,
+            Width, Height, { 0, 1 }, DXGI_FORMAT_R8G8B8A8_UNORM,
             DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_MODE_SCALING_UNSPECIFIED
         },
         { 1, 0 },
@@ -79,7 +93,7 @@ void Application::CreateFrameResources() {
     DirectX::ThrowIfFailed(s_Device->CreateRenderTargetView(BackbufferTex.Get(), nullptr, &s_RTV));
 
     constexpr D3D11_TEXTURE2D_DESC1 depthTextureDesc {
-        1280, 720, 1, 1, DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Width, Height, 1, 1, DXGI_FORMAT_D24_UNORM_S8_UINT,
         { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_DEPTH_STENCIL,
         0, 0, D3D11_TEXTURE_LAYOUT_UNDEFINED
     };
@@ -94,7 +108,7 @@ void Application::CreateFrameResources() {
     DirectX::ThrowIfFailed(s_Device->CreateDepthStencilView(s_DepthTexture.Get(), &depthStencilViewDesc, &s_DSV));
     s_DeviceContext->OMSetRenderTargets(1, s_RTV.GetAddressOf(), s_DSV.Get());
 
-    constexpr D3D11_VIEWPORT viewport { 0, 0, 1280, 720, 0, 1 };
+    constexpr D3D11_VIEWPORT viewport { 0, 0, Width, Height, 0, 1 };
     s_DeviceContext->RSSetViewports(1, &viewport);
 
     constexpr D3D11_SAMPLER_DESC samplerDesc {
@@ -153,7 +167,7 @@ void Application::InitDrawingState() {
         inputShaderBlob->GetBufferPointer(), inputShaderBlob->GetBufferSize(), &InputLayout));
     s_DeviceContext->IASetInputLayout(InputLayout.Get());
 
-    constexpr D3D11_DEPTH_STENCIL_DESC depthStencilDesc {
+    D3D11_DEPTH_STENCIL_DESC depthStencilDesc {
         true, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_LESS,
         false, 0xFF, 0xFF,
         { D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_INCR,
@@ -162,8 +176,10 @@ void Application::InitDrawingState() {
             D3D11_STENCIL_OP_KEEP, D3D11_COMPARISON_ALWAYS
         }
     };
-    DirectX::ThrowIfFailed(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilState));
-    s_DeviceContext->OMSetDepthStencilState(s_DepthStencilState.Get(), 1);
+    DirectX::ThrowIfFailed(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilStateBoard));
+    depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    DirectX::ThrowIfFailed(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilStatePiece));
+
 
     constexpr D3D11_RASTERIZER_DESC2 rasterDesc {
         D3D11_FILL_SOLID, D3D11_CULL_BACK, true, 0, 0.0f,
@@ -214,7 +230,7 @@ void Application::CompileShaders() {
 void Application::DrawChessPiece(const Piece &piece, ConstantBufferData &cbuffer) {
     cbuffer.ModelMatrix = piece.GetModelMatrix();
     UpdateConstantBuffer(cbuffer);
-    s_DeviceContext->PSSetShaderResources(0, 1, piece.GetImage());
+    s_DeviceContext->PSSetShaderResources(0, 1, s_PieceTextures[piece.GetType()].ResourceView().GetAddressOf());
     s_DeviceContext->DrawIndexed(6, 0, 0);
 }
 
@@ -228,7 +244,7 @@ void Application::UpdateConstantBuffer(const ConstantBufferData &cbuffer) {
 }
 
 Vector2 Application::ScreenToWorldPoint(const Vector2 &screen, const ConstantBufferData &cbuffer) {
-    const auto ndc = (Vector2(screen.x / 1280.0f, (720.0f - screen.y) / 720.0f) - Vector2(0.5f, 0.5f)) * 2;
+    const auto ndc = (Vector2(screen.x / static_cast<float>(Width), (static_cast<float>(Height) - screen.y) / static_cast<float>(Height)) - Vector2(0.5f, 0.5f)) * 2;
     return Vector2::Transform(Vector2::Transform(ndc, cbuffer.ProjectionMatrix.Invert()), cbuffer.ViewMatrix.Invert());
 }
 
@@ -248,13 +264,15 @@ void Application::Render() {
     const auto mouseState = Mouse::Get().GetState();
     s_MouseState.Update(mouseState);
 
-    if(s_MouseState.leftButton == Mouse::ButtonStateTracker::ButtonState::PRESSED) {
-        if(s_Piece.PointInside(ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer))) {
-            s_SelectedPiece = &s_Piece;
+    if(s_MouseState.leftButton == ButtonState::PRESSED) {
+        for(auto& piece : Board::GetBoard() | std::views::values) {
+            if(piece.PointInside(ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer))) {
+                s_SelectedPiece = &piece;
+            }
         }
     }
 
-    if(s_MouseState.leftButton == Mouse::ButtonStateTracker::ButtonState::RELEASED) {
+    if(s_MouseState.leftButton == ButtonState::RELEASED) {
         auto pos = ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer);
         pos.x = floor(pos.x);
         pos.y = floor(pos.y);
@@ -274,22 +292,26 @@ void Application::Render() {
     s_DeviceContext->ClearDepthStencilView(s_DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
     // Draw board
+    s_DeviceContext->OMSetDepthStencilState(s_DepthStencilStateBoard.Get(), 1);
     s_DeviceContext->VSSetShader(s_BoardShaderVertex.Get(), nullptr, 0);
     s_DeviceContext->PSSetShader(s_BoardShaderPixel.Get(), nullptr, 0);
 
     s_DeviceContext->DrawIndexed(6, 0, 0);
 
     // Draw pieces
+    s_DeviceContext->OMSetDepthStencilState(s_DepthStencilStatePiece.Get(), 1);
     s_DeviceContext->VSSetShader(s_PieceShaderVertex.Get(), nullptr, 0);
     s_DeviceContext->PSSetShader(s_PieceShaderPixel.Get(), nullptr, 0);
 
-    DrawChessPiece(s_Piece, cbuffer);
+    for(auto& piece : Board::GetBoard() | std::views::values) {
+        DrawChessPiece(piece, cbuffer);
+    }
 
     s_SwapChain->Present(0, 0);
 }
 
 HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR windowName) {
-    RECT wndRect { 0, 0, 1280, 720 };
+    RECT wndRect { 0, 0, Width, Height };
     AdjustWindowRect(&wndRect, WS_OVERLAPPEDWINDOW, FALSE);
 
     const LONG w = wndRect.right - wndRect.left;

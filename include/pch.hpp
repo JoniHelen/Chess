@@ -21,6 +21,7 @@
 #include <vector>
 #include <stdexcept>
 #include <unordered_map>
+#include <ranges>
 
 // DXTK
 #include <PlatformHelpers.h>
@@ -28,8 +29,10 @@
 #include <SimpleMath.h>
 #include <Mouse.h>
 
+using std::vector;
 using Microsoft::WRL::ComPtr;
 using DirectX::SimpleMath::Matrix;
 using DirectX::SimpleMath::Vector2;
 using DirectX::SimpleMath::Vector3;
 using DirectX::Mouse;
+using ButtonState = Mouse::ButtonStateTracker::ButtonState;

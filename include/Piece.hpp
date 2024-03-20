@@ -1,61 +1,89 @@
 #pragma once
 
-class Piece final {
-public:
-    enum class Type {
-        Pawn = 1 << 0,
-        Rook = 1 << 1,
-        Knight = 1 << 2,
-        Bishop = 1 << 3,
-        King = 1 << 4,
-        Queen = 1 << 5,
-        White = 1 << 6,
-        Black = 1 << 7
-    };
-
-    explicit Piece(const Type& type) noexcept;
-    Piece(const Type& type, const Vector2& pos) noexcept;
-    void SetPosition(const Vector2& pos) noexcept;
-    void SetImage(const ComPtr<ID3D11ShaderResourceView>& srv) noexcept;
-    void SetPickUpPosition(const Vector2& pos) noexcept;
-    [[nodiscard]] bool PointInside(const Vector2& point) const noexcept;
-    [[nodiscard]] ID3D11ShaderResourceView* const* GetImage() const;
-    [[nodiscard]] Matrix GetModelMatrix() const noexcept;
-
-private:
-    ComPtr<ID3D11ShaderResourceView> m_Image;
-    Matrix m_Transform;
-    Type m_Type;
-    Vector2 m_PickUpPosition;
+/// <summary>
+/// Describes a chess piece with flags for type and color
+/// </summary>
+enum class PieceFlag {
+    Pawn = 1 << 0,
+    Rook = 1 << 1,
+    Knight = 1 << 2,
+    Bishop = 1 << 3,
+    King = 1 << 4,
+    Queen = 1 << 5,
+    White = 1 << 6,
+    Black = 1 << 7
 };
 
-constexpr Piece::Type operator &(const Piece::Type& a, const Piece::Type& b) {
-    return static_cast<Piece::Type>(static_cast<int>(a) & static_cast<int>(b));
+// Bitwise operator overloads
+
+constexpr PieceFlag operator &(const PieceFlag& a, const PieceFlag& b) {
+    return static_cast<PieceFlag>(static_cast<int>(a) & static_cast<int>(b));
 }
 
-constexpr Piece::Type operator |(const Piece::Type& a, const Piece::Type& b) {
-    return static_cast<Piece::Type>(static_cast<int>(a) | static_cast<int>(b));
+constexpr PieceFlag operator |(const PieceFlag& a, const PieceFlag& b) {
+    return static_cast<PieceFlag>(static_cast<int>(a) | static_cast<int>(b));
 }
 
-constexpr Piece::Type operator ^(const Piece::Type& a, const Piece::Type& b) {
-    return static_cast<Piece::Type>(static_cast<int>(a) ^ static_cast<int>(b));
+constexpr PieceFlag operator ^(const PieceFlag& a, const PieceFlag& b) {
+    return static_cast<PieceFlag>(static_cast<int>(a) ^ static_cast<int>(b));
 }
 
-constexpr Piece::Type operator ~(const Piece::Type& a) {
-    return static_cast<Piece::Type>(~static_cast<int>(a));
+constexpr PieceFlag operator ~(const PieceFlag& a) {
+    return static_cast<PieceFlag>(~static_cast<int>(a));
 }
 
-constexpr Piece::Type& operator &=(Piece::Type& a, const Piece::Type& b) {
+constexpr PieceFlag& operator &=(PieceFlag& a, const PieceFlag& b) {
     a = a & b;
     return a;
 }
 
-constexpr Piece::Type& operator |=(Piece::Type& a, const Piece::Type& b) {
+constexpr PieceFlag& operator |=(PieceFlag& a, const PieceFlag& b) {
     a = a | b;
     return a;
 }
 
-constexpr Piece::Type& operator ^=(Piece::Type& a, const Piece::Type& b) {
+constexpr PieceFlag& operator ^=(PieceFlag& a, const PieceFlag& b) {
     a = a ^ b;
     return a;
 }
+
+/// <summary>
+/// A Chess Piece object
+/// </summary>
+class Piece final {
+public:
+    //Ctors
+
+    explicit Piece(const PieceFlag& type) noexcept;
+    Piece(const PieceFlag& type, const Vector2& pos) noexcept;
+
+    /// <summary>
+    /// Sets the position if the piece in world space
+    /// </summary>
+    /// <param name="pos"><c>Vector2</c> The position to set the piece to</param>
+    void SetPosition(const Vector2& pos) noexcept;
+
+    void SetPickUpPosition(const Vector2& pos) noexcept; // TODO: Integrate into game logic
+
+    /// <summary>
+    /// Checks if the given point is inside the square that the piece occupies
+    /// </summary>
+    /// <param name="point"><c>Vector2</c> The point to check</param>
+    /// <returns><c>true</c> if the point was inside the square</returns>
+    [[nodiscard]] bool PointInside(const Vector2& point) const noexcept;
+
+    /// <summary>
+    /// Gets the transformation matrix of the piece
+    /// </summary>
+    [[nodiscard]] Matrix GetModelMatrix() const noexcept;
+
+    /// <summary>
+    /// Gets the <c>PieceFlag</c> property of the piece
+    /// </summary>
+    [[nodiscard]] PieceFlag GetType() const noexcept;
+
+private:
+    Matrix m_Transform;
+    PieceFlag m_Type;
+    Vector2 m_PickUpPosition;
+};
