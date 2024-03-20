@@ -24,7 +24,7 @@
 #include <ranges>
 
 // DXTK
-#include <PlatformHelpers.h>
+#include <PlatformHelpers.h> // Not really public, but has ThrowIfFailed
 #include <WICTextureLoader.h>
 #include <SimpleMath.h>
 #include <Mouse.h>
