@@ -38,9 +38,9 @@ target_include_directories(Chess PRIVATE
 target_link_libraries(Chess d3d11 dxgi d3dcompiler DirectXTK)
 
 add_custom_command(TARGET Chess POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_custom_command(TARGET Chess POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ChessPieces ${CMAKE_CURRENT_BINARY_DIR}/textures
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/ChessPieces ${CMAKE_CURRENT_BINARY_DIR}/textures
 )
