@@ -25,18 +25,7 @@ VertexOutput vert(VertexInput input)
     return output;
 }
 
-Texture2D mainTex : register(t0);
-//SamplerState mainTexSampler : register(s0);
-SamplerState MeshTextureSampler
-{
-    Filter = MIN_MAG_MIP_LINEAR;
-    AddressU = Wrap;
-    AddressV = Wrap;
-};
-
 float4 frag(VertexOutput input) : SV_TARGET
 {
-    float4 fragColor = mainTex.Sample(MeshTextureSampler, input.uv * float2(1, -1));
-    clip(fragColor.a - 0.00001);
-    return fragColor;
+    return float4(1.0f, 0.0f, 0.0f, 0.75f);
 }

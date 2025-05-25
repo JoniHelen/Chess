@@ -1,9 +1,10 @@
 #pragma once
 
-#include <Texture2D.hpp> // TextureMap needs the full implementation of Texture2D
+#include <Texture2D.hpp>
+#include <Move.hpp>
 
 class Piece;
-enum class PieceFlag;
+enum class PieceFlag : uint8_t;
 
 using TextureMap = std::unordered_map<PieceFlag, Texture2D>;
 
@@ -19,7 +20,7 @@ public:
     /// </summary>
     /// <param name="hInstance"><c>HINSTANCE</c> The windows process handle</param>
     /// <returns><c>int</c> Exit code</returns>
-    static int Run(HINSTANCE hInstance);
+    static auto Run(HINSTANCE hInstance) -> int;
 
     /// <summary>
     /// A texture collection that can be indexed with <c>PieceFlag</c>
@@ -51,87 +52,98 @@ private:
     /// <summary>
     /// Loads piece textures into a <c>TextureMap</c>
     /// </summary>
-    static void LoadPieceTextures();
+    static auto LoadPieceTextures() -> void;
 
     /// <summary>
     /// Creates a <c>Texture2D</c> object from a filepath
     /// </summary>
     /// <param name="filename"><c>wstring</c> The path to the file to load</param>
     /// <returns><c>Texture2D</c> The created texture object</returns>
-    static Texture2D CreateTexture(const std::wstring& filename);
+    static auto CreateTexture(std::wstring_view filename) -> Texture2D;
 
     /// <summary>
     /// Initializes the graphics device and creates a <c>IDXGISwapChain</c>
     /// </summary>
     /// <param name="hWnd"><c>HWND</c> Window handle for displaying images</param>
-    static void InitGraphicsDevice(HWND hWnd);
+    static auto InitGraphicsDevice(HWND hWnd) -> void;
 
     /// <summary>
-    /// Creates RTVs, DSVs, and samplers
+    /// Creates RTVs and DSVs
     /// </summary>
-    static void CreateFrameResources();
+    static auto CreateFrameResources(uint32_t width, uint32_t height) -> void;
 
     /// <summary>
     /// Creates Vertex, Index, and Constant buffers
     /// </summary>
-    static void CreateBuffers();
+    static auto CreateBuffers() -> void;
 
     /// <summary>
     /// Creates InputLayouts, DepthStencilStates, and RasterizerStates
     /// </summary>
-    static void InitDrawingState();
+    static auto InitDrawingState() -> void;
 
     /// <summary>
     /// Compiles shaders to shader objects
     /// </summary>
-    static void CompileShaders();
+    static auto CompileShaders() -> void;
 
     /// <summary>
     /// Draws a single Chess Piece
     /// </summary>
     /// <param name="piece"><c>Piece</c> The Piece to draw</param>
     /// <param name="cbuffer"><c>ConstantBufferData</c> The current constant buffer</param>
-    static void DrawChessPiece(const Piece& piece, ConstantBufferData& cbuffer);
+    static auto DrawChessPiece(const Piece& piece, ConstantBufferData& cbuffer) -> void;
+
+    /// <summary>
+    /// Draws a single highlight
+    /// </summary>
+    /// <param name="pos"><c>Vector2</c> The position of the highlight</param>
+    /// <param name="cbuffer"><c>ConstantBufferData</c> The current constant buffer</param>
+	static auto DrawHighlight(const Vector2& pos, ConstantBufferData& cbuffer) -> void;
 
     /// <summary>
     /// Updates constant buffer data to the GPU
     /// </summary>
     /// <param name="cbuffer"><c>ConstantBufferData</c> The data to update</param>
-    static void UpdateConstantBuffer(const ConstantBufferData& cbuffer);
+    static auto UpdateConstantBuffer(const ConstantBufferData& cbuffer) -> void;
 
     /// <summary>
     /// Transforms a point from screen space into world space
     /// </summary>
     /// <param name="screen"><c>Vector2</c> The position on screen</param>
+    /// <param name="screenMetrics"><c>Vector2</c> The screen width and height</param>
     /// <param name="cbuffer"><c>ConstantBufferData</c> The matrix data to use with transforms</param>
-    static Vector2 ScreenToWorldPoint(const Vector2& screen, const ConstantBufferData& cbuffer);
+    static auto ScreenToWorldPoint(const Vector2& screen, const Vector2& screenMetrics, const ConstantBufferData& cbuffer) -> Vector2;
 
     /// <summary>
     /// Transforms a point from screen space into world space
     /// </summary>
     /// <param name="sx"><c>int</c> The x position on screen</param>
     /// <param name="sy"><c>int</c> The y position on screen</param>
+    /// <param name="smx"><c>int</c> The width of the screen</param>
+    /// <param name="smy"><c>int</c> The height of the screen</param>
     /// <param name="cbuffer"><c>ConstantBufferData</c> The matrix data to use with transforms</param>
-    static Vector2 ScreenToWorldPoint(const int& sx, const int& sy, const ConstantBufferData& cbuffer);
+    static auto ScreenToWorldPoint(int sx, int sy, int smx, int smy, const ConstantBufferData& cbuffer) -> Vector2;
 
     /// <summary>
     /// Renders the scene to the screen
     /// </summary>
-    static void Render();
+    static auto Render() -> void;
 
     /// <summary>
     /// Initializes a window
     /// </summary>
     /// <param name="hInstance"><c>HINSTANCE</c> The windows process handle</param>
+    /// <param name="windowClass"><c>LPCWSTR</c> The windows window class of the window</param>
     /// <param name="windowName"><c>LPCWSTR</c> The display name of the window</param>
     /// <returns><c>HWND</c> A handle to the window</returns>
-    static HWND InitWindow(HINSTANCE hInstance, LPCWSTR windowName);
+    static auto InitWindow(HINSTANCE hInstance, ATOM windowClass, LPCWSTR windowName) -> HWND;
 
     /// <summary>
     /// Creates a window class with the name "Main"
     /// </summary>
     /// <param name="hInstance"><c>HINSTANCE</c> The windows process handle</param>
-    static void CreateWindowClass(HINSTANCE hInstance);
+    static auto CreateWindowClass(HINSTANCE hInstance) -> ATOM;
 
     /// <summary>
     /// The window procedure callback for WIN32 message handling
@@ -141,7 +153,7 @@ private:
     /// <param name="wParam"><c>WPARAM</c> Additional data for the message</param>
     /// <param name="lParam"><c>LPARAM</c> Additional data for the message</param>
     /// <returns><c>LRESULT</c> A result code for handling the message</returns>
-    static LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    static auto CALLBACK WindowProcedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT;
 
     /// <summary>
     /// Tracks mouse clicks
@@ -151,19 +163,25 @@ private:
     /// <summary>
     /// Contains vertices for a quad with UV coordinates
     /// </summary>
-    static constexpr Vertex quad[4u] {
-        { { 0.0f, 0.0f }, { 0.0f, 0.0f } },
-        { { 1.0f, 0.0f }, { 1.0f, 0.0f } },
-        { { 1.0f, 1.0f }, { 1.0f, 1.0f } },
-        { { 0.0f, 1.0f }, { 0.0f, 1.0f } },
+    static constexpr std::array<Vertex, 4> quad {
+        {
+            { { 0.0F, 0.0F }, { 0.0F, 0.0F } },
+            { { 1.0F, 0.0F }, { 1.0F, 0.0F } },
+            { { 1.0F, 1.0F }, { 1.0F, 1.0F } },
+            { { 0.0F, 1.0F }, { 0.0F, 1.0F } },
+        }
     };
 
     /// <summary>
     /// Contains indices for a quad
     /// </summary>
-    static constexpr uint32_t indices[6u] {
+    static constexpr std::array<uint32_t, 6> indices {
         0, 1, 2, 0, 2, 3
     };
+
+    inline static HWND s_Window;
+
+    inline static std::vector<Move> s_Moves;
 
     // Rendering components
 
@@ -185,6 +203,7 @@ private:
     inline static ComPtr<ID3D11SamplerState> s_SamplerState;
 
     inline static Piece* s_SelectedPiece;
+    inline static Vector2 s_PickupPos;
 
     // Shaders
     inline static ComPtr<ID3D11VertexShader> s_BoardShaderVertex;
@@ -192,4 +211,7 @@ private:
 
     inline static ComPtr<ID3D11VertexShader> s_PieceShaderVertex;
     inline static ComPtr<ID3D11PixelShader> s_PieceShaderPixel;
+
+	inline static ComPtr<ID3D11VertexShader> s_HighlightShaderVertex;
+    inline static ComPtr<ID3D11PixelShader> s_HighlightShaderPixel;
 };

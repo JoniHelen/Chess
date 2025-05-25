@@ -1,9 +1,10 @@
+#include <pch.hpp>
 #include <Texture2D.hpp>
 
-ComPtr<ID3D11Resource>& Texture2D::Resource() noexcept {
+auto Texture2D::Resource() noexcept -> ComPtr<ID3D11Resource>& {
     return m_TextureResource;
 }
 
-ComPtr<ID3D11ShaderResourceView> & Texture2D::ResourceView() noexcept {
+auto Texture2D::ResourceView() noexcept -> ComPtr<ID3D11ShaderResourceView>& {
     return m_SRV;
 }

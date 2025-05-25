@@ -9,12 +9,12 @@ public:
     /// <summary>
     /// Exposes the texture resource
     /// </summary>
-    [[nodiscard]] ComPtr<ID3D11Resource>& Resource() noexcept;
+    [[nodiscard]] auto Resource() noexcept -> ComPtr<ID3D11Resource>&;
 
     /// <summary>
     /// Exposes the shader resource view
     /// </summary>
-    [[nodiscard]] ComPtr<ID3D11ShaderResourceView>& ResourceView() noexcept;
+    [[nodiscard]] auto ResourceView() noexcept -> ComPtr<ID3D11ShaderResourceView>&;
 
 private:
     ComPtr<ID3D11Resource> m_TextureResource;

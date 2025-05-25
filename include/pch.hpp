@@ -22,6 +22,8 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <ranges>
+#include <array>
+#include <algorithm>
 
 // DXTK
 #include <PlatformHelpers.h> // Not really public, but has ThrowIfFailed
@@ -29,7 +31,6 @@
 #include <SimpleMath.h>
 #include <Mouse.h>
 
-using std::vector;
 using Microsoft::WRL::ComPtr;
 using DirectX::SimpleMath::Matrix;
 using DirectX::SimpleMath::Vector2;

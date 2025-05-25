@@ -3,10 +3,10 @@
 #include <Piece.hpp>
 #include <Board.hpp>
 
-constexpr uint32_t Width = 1920u;
-constexpr uint32_t Height = 1080u;
+constexpr uint32_t Width = 1920U;
+constexpr uint32_t Height = 1080U;
 
-int Application::Run(HINSTANCE hInstance) {
+auto Application::Run(HINSTANCE hInstance) -> int {
     // Initilaize COM Library
     DirectX::ThrowIfFailed(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
 
@@ -14,12 +14,12 @@ int Application::Run(HINSTANCE hInstance) {
     const auto mouse = std::make_unique<Mouse>();
 
     // Create window
-    CreateWindowClass(hInstance);
-    const HWND hWindow = InitWindow(hInstance, L"Chess");
+    const ATOM wndClass = CreateWindowClass(hInstance);
+    s_Window = InitWindow(hInstance, wndClass, L"Chess");
 
     // Iniltialize renderer
-    InitGraphicsDevice(hWindow);
-    CreateFrameResources();
+    InitGraphicsDevice(s_Window);
+    CreateFrameResources(Width, Height);
     CreateBuffers();
     InitDrawingState();
     CompileShaders();
@@ -28,7 +28,7 @@ int Application::Run(HINSTANCE hInstance) {
     // Set board state to starting position
     Board::SetState("1n2q3/1PBPpbK1/1N1pR1N1/2p3pP/rpPP2Bn/p6P/4pQPb/1k6 w - - 0 1");
 
-    ShowWindow(hWindow, SW_SHOW);
+    ShowWindow(s_Window, SW_SHOW);
 
     // Application loop
     MSG message;
@@ -38,37 +38,44 @@ int Application::Run(HINSTANCE hInstance) {
     }
 
     // Shut down
-    DestroyWindow(hWindow);
+    DestroyWindow(s_Window);
     UnregisterClass(L"Main", hInstance);
     return 0;
 }
 
 void Application::LoadPieceTextures() {
-    s_PieceTextures.insert({ PieceFlag::Pawn | PieceFlag::Black, CreateTexture(L"textures/bPawn.png") });
-    s_PieceTextures.insert({ PieceFlag::Rook | PieceFlag::Black, CreateTexture(L"textures/bRook.png") });
+    s_PieceTextures.insert({ PieceFlag::Pawn   | PieceFlag::Black, CreateTexture(L"textures/bPawn.png") });
+    s_PieceTextures.insert({ PieceFlag::Rook   | PieceFlag::Black, CreateTexture(L"textures/bRook.png") });
     s_PieceTextures.insert({ PieceFlag::Knight | PieceFlag::Black, CreateTexture(L"textures/bKnight.png") });
     s_PieceTextures.insert({ PieceFlag::Bishop | PieceFlag::Black, CreateTexture(L"textures/bBishop.png") });
-    s_PieceTextures.insert({ PieceFlag::King | PieceFlag::Black, CreateTexture(L"textures/bKing.png") });
-    s_PieceTextures.insert({ PieceFlag::Queen | PieceFlag::Black, CreateTexture(L"textures/bQueen.png") });
-    s_PieceTextures.insert({ PieceFlag::Pawn | PieceFlag::White, CreateTexture(L"textures/wPawn.png") });
-    s_PieceTextures.insert({ PieceFlag::Rook | PieceFlag::White, CreateTexture(L"textures/wRook.png") });
+    s_PieceTextures.insert({ PieceFlag::King   | PieceFlag::Black, CreateTexture(L"textures/bKing.png") });
+    s_PieceTextures.insert({ PieceFlag::Queen  | PieceFlag::Black, CreateTexture(L"textures/bQueen.png") });
+    s_PieceTextures.insert({ PieceFlag::Pawn   | PieceFlag::White, CreateTexture(L"textures/wPawn.png") });
+    s_PieceTextures.insert({ PieceFlag::Rook   | PieceFlag::White, CreateTexture(L"textures/wRook.png") });
     s_PieceTextures.insert({ PieceFlag::Knight | PieceFlag::White, CreateTexture(L"textures/wKnight.png") });
     s_PieceTextures.insert({ PieceFlag::Bishop | PieceFlag::White, CreateTexture(L"textures/wBishop.png") });
-    s_PieceTextures.insert({ PieceFlag::King | PieceFlag::White, CreateTexture(L"textures/wKing.png") });
-    s_PieceTextures.insert({ PieceFlag::Queen | PieceFlag::White, CreateTexture(L"textures/wQueen.png") });
+    s_PieceTextures.insert({ PieceFlag::King   | PieceFlag::White, CreateTexture(L"textures/wKing.png") });
+    s_PieceTextures.insert({ PieceFlag::Queen  | PieceFlag::White, CreateTexture(L"textures/wQueen.png") });
 }
 
-Texture2D Application::CreateTexture(const std::wstring& filename) {
+auto Application::CreateTexture(const std::wstring_view filename) -> Texture2D {
     Texture2D tex;
     // DirectXTK WICLoader
     DirectX::ThrowIfFailed(DirectX::CreateWICTextureFromFile(s_Device.Get(), s_DeviceContext.Get(),
-        filename.c_str(), &tex.Resource(), &tex.ResourceView()));
+        filename.data(), &tex.Resource(), &tex.ResourceView()));
     return tex;
 }
 
-void Application::InitGraphicsDevice(const HWND hWnd) {
+auto Application::InitGraphicsDevice(const HWND hWnd) -> void {
+
+    uint32_t factoryFlag = 0;
+
+#ifndef NDEBUG
+    factoryFlag = DXGI_CREATE_FACTORY_DEBUG;
+#endif
+
     // Create dxgi factory
-    DirectX::ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&s_Factory)));
+    DirectX::ThrowIfFailed(CreateDXGIFactory2(factoryFlag, IID_PPV_ARGS(&s_Factory)));
     DirectX::ThrowIfFailed(s_Factory->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&s_Adapter)));
 
     // Create device, context and swapchain
@@ -84,30 +91,54 @@ void Application::InitGraphicsDevice(const HWND hWnd) {
         0
     };
 
-    constexpr D3D_FEATURE_LEVEL FeatureLevels[2] { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
+    constexpr std::array FeatureLevels { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
 
     ComPtr<ID3D11Device> t_Device;
     ComPtr<ID3D11DeviceContext> t_DeviceContext;
     ComPtr<IDXGISwapChain> t_SwapChain;
 
+    uint32_t deviceFlags = D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+#ifndef NDEBUG
+    deviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
     DirectX::ThrowIfFailed(D3D11CreateDeviceAndSwapChain(s_Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-        D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, FeatureLevels, 2,
-        D3D11_SDK_VERSION, &scDesc, &t_SwapChain, &t_Device, nullptr, &t_DeviceContext));
+        deviceFlags, FeatureLevels.data(), 2, D3D11_SDK_VERSION, &scDesc,
+        &t_SwapChain, &t_Device, nullptr, &t_DeviceContext
+        )
+    );
 
     DirectX::ThrowIfFailed(t_Device.As(&s_Device));
     DirectX::ThrowIfFailed(t_DeviceContext.As(&s_DeviceContext));
     DirectX::ThrowIfFailed(t_SwapChain.As(&s_SwapChain));
+
+    // Create linear sampler for piece texture sampling
+    constexpr D3D11_SAMPLER_DESC samplerDesc {
+        D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP,
+        D3D11_TEXTURE_ADDRESS_WRAP, 0, 1, D3D11_COMPARISON_ALWAYS,
+        1, 1, 1, 1, 0, 0
+    };
+
+    DirectX::ThrowIfFailed(s_Device->CreateSamplerState(&samplerDesc, &s_SamplerState));
+    s_DeviceContext->PSSetSamplers(0, 1, s_SamplerState.GetAddressOf());
 }
 
-void Application::CreateFrameResources() {
+auto Application::CreateFrameResources(const uint32_t width, const uint32_t height) -> void {
+
+    if (width == 0 || height == 0) {
+        return;
+    }
+
     // Create render target view
-    ComPtr<ID3D11Texture2D1> BackbufferTex;
+    ComPtr<ID3D11Texture2D> BackbufferTex;
     DirectX::ThrowIfFailed(s_SwapChain->GetBuffer(0, IID_PPV_ARGS(&BackbufferTex)));
-    DirectX::ThrowIfFailed(s_Device->CreateRenderTargetView(BackbufferTex.Get(), nullptr, &s_RTV));
+    HRESULT hr = s_Device->CreateRenderTargetView(BackbufferTex.Get(), nullptr, &s_RTV);
+    DirectX::ThrowIfFailed(hr);
 
     // Create depth stencil texture and depth stencil view
-    constexpr D3D11_TEXTURE2D_DESC1 depthTextureDesc {
-        Width, Height, 1, 1, DXGI_FORMAT_D24_UNORM_S8_UINT,
+    const D3D11_TEXTURE2D_DESC1 depthTextureDesc {
+        width, height, 1, 1, DXGI_FORMAT_D24_UNORM_S8_UINT,
         { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_DEPTH_STENCIL,
         0, 0, D3D11_TEXTURE_LAYOUT_UNDEFINED
     };
@@ -121,23 +152,9 @@ void Application::CreateFrameResources() {
 
     DirectX::ThrowIfFailed(s_Device->CreateDepthStencilView(s_DepthTexture.Get(), &depthStencilViewDesc, &s_DSV));
     s_DeviceContext->OMSetRenderTargets(1, s_RTV.GetAddressOf(), s_DSV.Get());
-
-    // Set viewport
-    constexpr D3D11_VIEWPORT viewport { 0, 0, Width, Height, 0, 1 };
-    s_DeviceContext->RSSetViewports(1, &viewport);
-
-    // Create linear sampler for piece texture sampling
-    constexpr D3D11_SAMPLER_DESC samplerDesc {
-        D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP,
-        D3D11_TEXTURE_ADDRESS_WRAP, 0, 1, D3D11_COMPARISON_ALWAYS,
-        1, 1, 1, 1, 0, 0
-    };
-
-    DirectX::ThrowIfFailed(s_Device->CreateSamplerState(&samplerDesc, &s_SamplerState));
-    s_DeviceContext->PSSetSamplers(0, 1, s_SamplerState.GetAddressOf());
 }
 
-void Application::CreateBuffers() {
+auto Application::CreateBuffers() -> void {
     // Primitive topology triangles
     s_DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -146,7 +163,8 @@ void Application::CreateBuffers() {
         sizeof(quad), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER,
         0, 0, 0
     };
-    constexpr D3D11_SUBRESOURCE_DATA vertexData { quad, 0, 0 };
+
+    constexpr D3D11_SUBRESOURCE_DATA vertexData { quad.data(), 0, 0 };
     DirectX::ThrowIfFailed(s_Device->CreateBuffer(&vertexBufferDesc, &vertexData, &s_VertexBuffer));
     constexpr unsigned stride = sizeof(Vertex);
     constexpr unsigned offset = 0;
@@ -157,7 +175,7 @@ void Application::CreateBuffers() {
         sizeof(indices), D3D11_USAGE_DEFAULT, D3D11_BIND_INDEX_BUFFER,
         0, 0, 0
     };
-    constexpr D3D11_SUBRESOURCE_DATA indexData { indices, 0, 0 };
+    constexpr D3D11_SUBRESOURCE_DATA indexData { indices.data(), 0, 0 };
     DirectX::ThrowIfFailed(s_Device->CreateBuffer(&indexBufferDesc, &indexData, &s_IndexBuffer));
     s_DeviceContext->IASetIndexBuffer(s_IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 
@@ -169,29 +187,32 @@ void Application::CreateBuffers() {
     DirectX::ThrowIfFailed(s_Device->CreateBuffer(&constantBufferDesc, nullptr, &s_ConstantBuffer));
 }
 
-void Application::InitDrawingState() {
+auto Application::InitDrawingState() -> void {
     // Create and set input layout
     ComPtr<ID3D11InputLayout> InputLayout;
-    constexpr D3D11_INPUT_ELEMENT_DESC polygonLayout[2] { {
-            "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-            0, D3D11_INPUT_PER_VERTEX_DATA, 0
-        }, {
-            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-            D3D11_APPEND_ALIGNED_ELEMENT,D3D11_INPUT_PER_VERTEX_DATA, 0
+    constexpr std::array<D3D11_INPUT_ELEMENT_DESC, 2> polygonLayout {
+        {
+            {
+                "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+                0, D3D11_INPUT_PER_VERTEX_DATA, 0
+            }, {
+                "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+                D3D11_APPEND_ALIGNED_ELEMENT,D3D11_INPUT_PER_VERTEX_DATA, 0
+            }
         }
     };
 
     ComPtr<ID3DBlob> inputShaderBlob;
     DirectX::ThrowIfFailed(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert",
         "vs_5_0", 0, 0, &inputShaderBlob, nullptr));
-    DirectX::ThrowIfFailed(s_Device->CreateInputLayout(polygonLayout, 2,
+    DirectX::ThrowIfFailed(s_Device->CreateInputLayout(polygonLayout.data(), 2,
         inputShaderBlob->GetBufferPointer(), inputShaderBlob->GetBufferSize(), &InputLayout));
     s_DeviceContext->IASetInputLayout(InputLayout.Get());
 
     // Create depth stencil states
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc {
-        true, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_LESS,
-        false, 0xFF, 0xFF,
+        TRUE, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_LESS,
+        FALSE, D3D11_DEFAULT_STENCIL_READ_MASK, D3D11_DEFAULT_STENCIL_WRITE_MASK,
         { D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_INCR,
             D3D11_STENCIL_OP_KEEP, D3D11_COMPARISON_ALWAYS
         }, { D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_INCR,
@@ -199,13 +220,13 @@ void Application::InitDrawingState() {
         }
     };
     DirectX::ThrowIfFailed(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilStateBoard));
-    depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
     DirectX::ThrowIfFailed(s_Device->CreateDepthStencilState(&depthStencilDesc, &s_DepthStencilStatePiece));
 
     // Create and set rasterizer state
     constexpr D3D11_RASTERIZER_DESC2 rasterDesc {
-        D3D11_FILL_SOLID, D3D11_CULL_BACK, true, 0, 0.0f,
-        0.0f, true, false, false, false,
+        D3D11_FILL_SOLID, D3D11_CULL_BACK, TRUE, 0, 0.0F,
+        0.0F, TRUE, FALSE, FALSE, FALSE,
         0, D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF
     };
     DirectX::ThrowIfFailed(s_Device->CreateRasterizerState2(&rasterDesc, &s_RasterizerState));
@@ -213,22 +234,24 @@ void Application::InitDrawingState() {
 
     // Create and set blend state
     constexpr D3D11_BLEND_DESC1 blendDesc {
-        false, false,
+        FALSE, FALSE,
         { {
-                true, false, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA,
+                TRUE, FALSE, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA,
                 D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA,
                 D3D11_BLEND_OP_ADD, D3D11_LOGIC_OP_NOOP, D3D11_COLOR_WRITE_ENABLE_ALL
             }
         }
     };
     DirectX::ThrowIfFailed(s_Device->CreateBlendState1(&blendDesc, &s_BlendState));
-    s_DeviceContext->OMSetBlendState(s_BlendState.Get(), nullptr, 0xffffffff);
+    s_DeviceContext->OMSetBlendState(s_BlendState.Get(), nullptr, D3D11_DEFAULT_SAMPLE_MASK);
 }
 
-void Application::CompileShaders() {
+auto Application::CompileShaders() -> void {
     // Compile shaders from file into blobs
     ComPtr<ID3DBlob> vertexShaderBlob;
     ComPtr<ID3DBlob> pixelShaderBlob;
+
+    // TODO: Refactor this into a function
 
     // Board
     DirectX::ThrowIfFailed(D3DCompileFromFile(L"board.hlsl", nullptr, nullptr, "vert",
@@ -249,9 +272,19 @@ void Application::CompileShaders() {
             vertexShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderVertex));
     DirectX::ThrowIfFailed(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(),
         pixelShaderBlob->GetBufferSize(), nullptr, &s_PieceShaderPixel));
+
+    // Highlight
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"highlight.hlsl", nullptr, nullptr, "vert",
+        "vs_5_0", 0, 0, &vertexShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(D3DCompileFromFile(L"highlight.hlsl", nullptr, nullptr, "frag",
+        "ps_5_0", 0, 0, &pixelShaderBlob, nullptr));
+    DirectX::ThrowIfFailed(s_Device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(),
+        vertexShaderBlob->GetBufferSize(), nullptr, &s_HighlightShaderVertex));
+    DirectX::ThrowIfFailed(s_Device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(),
+        pixelShaderBlob->GetBufferSize(), nullptr, &s_HighlightShaderPixel));
 }
 
-void Application::DrawChessPiece(const Piece &piece, ConstantBufferData &cbuffer) {
+auto Application::DrawChessPiece(const Piece &piece, ConstantBufferData &cbuffer) -> void {
     // Update transform, set texture, and draw
     cbuffer.ModelMatrix = piece.GetModelMatrix();
     UpdateConstantBuffer(cbuffer);
@@ -259,7 +292,13 @@ void Application::DrawChessPiece(const Piece &piece, ConstantBufferData &cbuffer
     s_DeviceContext->DrawIndexed(6, 0, 0);
 }
 
-void Application::UpdateConstantBuffer(const ConstantBufferData &cbuffer) {
+auto Application::DrawHighlight(const Vector2& pos, ConstantBufferData& cbuffer) -> void {
+    cbuffer.ModelMatrix = Matrix::CreateTranslation(pos.x, pos.y, 0.005F);
+    UpdateConstantBuffer(cbuffer);
+    s_DeviceContext->DrawIndexed(6, 0, 0);
+}
+
+auto Application::UpdateConstantBuffer(const ConstantBufferData &cbuffer) -> void {
     // Map and unmap constant buffer to set data, and then upload
     D3D11_MAPPED_SUBRESOURCE mappedResource;
     DirectX::ThrowIfFailed(s_DeviceContext->Map(s_ConstantBuffer.Get(), 0,
@@ -269,22 +308,29 @@ void Application::UpdateConstantBuffer(const ConstantBufferData &cbuffer) {
     s_DeviceContext->VSSetConstantBuffers(0, 1, s_ConstantBuffer.GetAddressOf());
 }
 
-Vector2 Application::ScreenToWorldPoint(const Vector2 &screen, const ConstantBufferData &cbuffer) {
+auto Application::ScreenToWorldPoint(const Vector2 &screen, const Vector2& screenMetrics, const ConstantBufferData &cbuffer) -> Vector2 {
     // Transform into ndc, then into view space, and then into world space
-    const auto ndc = (Vector2(screen.x / static_cast<float>(Width), (static_cast<float>(Height) - screen.y) / static_cast<float>(Height)) - Vector2(0.5f, 0.5f)) * 2;
+    const auto ndc = (Vector2(screen.x / screenMetrics.x, (screenMetrics.y - screen.y) / screenMetrics.y) - Vector2(0.5F, 0.5F)) * 2.0F;
     return Vector2::Transform(Vector2::Transform(ndc, cbuffer.ProjectionMatrix.Invert()), cbuffer.ViewMatrix.Invert());
 }
 
-Vector2 Application::ScreenToWorldPoint(const int &sx, const int &sy, const ConstantBufferData &cbuffer) {
-    return ScreenToWorldPoint(Vector2(static_cast<float>(sx), static_cast<float>(sy)), cbuffer);
+auto Application::ScreenToWorldPoint(const int sx, const int sy, const int smx, const int smy, const ConstantBufferData &cbuffer) -> Vector2 {
+    return ScreenToWorldPoint(Vector2(static_cast<float>(sx), static_cast<float>(sy)), Vector2(static_cast<float>(smx), static_cast<float>(smy)), cbuffer);
 }
 
-void Application::Render() {
+auto Application::Render() -> void {
+
+    // Get window metrics
+    RECT clientRect;
+    GetClientRect(s_Window, &clientRect);
+    const auto windowWidth = static_cast<float>(clientRect.right);
+    const auto windowHeight = static_cast<float>(clientRect.bottom);
+
     // Initialize cbuffer for current config
     ConstantBufferData cbuffer {
         Matrix::CreateScale(8, 8, 1),
         Matrix::CreateTranslation(4, 4, 0).Invert(),
-        Matrix::CreateOrthographic(9.0f * 1920.0f / 1080.0f, 9.0f, -1, 1)
+        Matrix::CreateOrthographic(9.0F * windowWidth / windowHeight, 9.0F, -1, 1)
     };
 
     UpdateConstantBuffer(cbuffer);
@@ -296,30 +342,60 @@ void Application::Render() {
     // Handle basic piece dragging
     if(s_MouseState.leftButton == ButtonState::PRESSED) {
         for(auto& piece : Board::GetBoard() | std::views::values) {
-            if(piece.PointInside(ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer))) {
+            if(piece.PointInside(ScreenToWorldPoint(mouseState.x, mouseState.y, clientRect.right, clientRect.bottom, cbuffer))) {
                 s_SelectedPiece = &piece;
+                s_PickupPos = piece.GetPosition();
+                s_SelectedPiece->SetZIndex(1.0F);
+                auto pos = ScreenToWorldPoint(mouseState.x, mouseState.y, clientRect.right, clientRect.bottom, cbuffer);
+                pos.x = floor(pos.x);
+                pos.y = floor(pos.y);
+                Board::CalculateLegalMoves({ static_cast<int>(pos.x), static_cast<int>(pos.y) }, *s_SelectedPiece, s_Moves);
             }
         }
     }
 
     if(s_MouseState.leftButton == ButtonState::RELEASED) {
-        auto pos = ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer);
+        auto pos = ScreenToWorldPoint(mouseState.x, mouseState.y, clientRect.right, clientRect.bottom, cbuffer);
         pos.x = floor(pos.x);
         pos.y = floor(pos.y);
-        if(s_SelectedPiece) {
+        if(s_SelectedPiece != nullptr) {
             s_SelectedPiece->SetPosition(pos);
+            s_SelectedPiece->SetZIndex(0.01F);
+
+            if (pos != s_PickupPos) {
+                const auto move = std::ranges::find_if(s_Moves, [&pos](const Move& m) -> bool {
+	                return static_cast<Vector2>(m.To) == pos;
+                });
+
+                if (move != s_Moves.end()) {
+	                Board::MakeMove(*move);
+				}
+                else {
+					s_SelectedPiece->SetPosition(s_PickupPos);
+                }
+			}
+
             s_SelectedPiece = nullptr;
         }
     }
 
-    if(s_SelectedPiece) {
-        s_SelectedPiece->SetPosition(ScreenToWorldPoint(mouseState.x, mouseState.y, cbuffer) - Vector2(0.5f, 0.5f));
+    if(s_SelectedPiece != nullptr) {
+        s_SelectedPiece->SetPosition(ScreenToWorldPoint(mouseState.x, mouseState.y, clientRect.right, clientRect.bottom, cbuffer) - Vector2(0.5F, 0.5F));
     }
 
     // Clear RT
-    constexpr float color[4] { 0.2f, 0.2f, 0.2f, 1.0f };
-    s_DeviceContext->ClearRenderTargetView(s_RTV.Get(), color);
-    s_DeviceContext->ClearDepthStencilView(s_DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+    constexpr std::array color { 0.2F, 0.2F, 0.2F, 1.0F };
+    s_DeviceContext->ClearRenderTargetView(s_RTV.Get(), color.data());
+    s_DeviceContext->ClearDepthStencilView(s_DSV.Get(), D3D11_CLEAR_DEPTH, 1.0F, 0U);
+
+    // Set viewport
+
+    const D3D11_VIEWPORT viewport {
+        0, 0,
+        windowWidth, windowHeight,
+        0, 1
+    };
+    s_DeviceContext->RSSetViewports(1, &viewport);
 
     // Draw board
     s_DeviceContext->OMSetDepthStencilState(s_DepthStencilStateBoard.Get(), 1);
@@ -328,8 +404,16 @@ void Application::Render() {
 
     s_DeviceContext->DrawIndexed(6, 0, 0);
 
-    // Draw pieces
+    // Draw highlights
     s_DeviceContext->OMSetDepthStencilState(s_DepthStencilStatePiece.Get(), 1);
+    s_DeviceContext->VSSetShader(s_HighlightShaderVertex.Get(), nullptr, 0);
+    s_DeviceContext->PSSetShader(s_HighlightShaderPixel.Get(), nullptr, 0);
+
+    for (auto& move : s_Moves) {
+        DrawHighlight(move.To, cbuffer);
+    }
+
+    // Draw pieces
     s_DeviceContext->VSSetShader(s_PieceShaderVertex.Get(), nullptr, 0);
     s_DeviceContext->PSSetShader(s_PieceShaderPixel.Get(), nullptr, 0);
 
@@ -337,10 +421,10 @@ void Application::Render() {
         DrawChessPiece(piece, cbuffer);
     }
 
-    s_SwapChain->Present(0, 0);
+    s_SwapChain->Present(1, 0);
 }
 
-HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR windowName) {
+auto Application::InitWindow(const HINSTANCE hInstance, const ATOM windowClass, const LPCWSTR windowName) -> HWND {
     // Take into account the top bar of the window
     RECT wndRect { 0, 0, Width, Height };
     AdjustWindowRect(&wndRect, WS_OVERLAPPEDWINDOW, FALSE);
@@ -349,7 +433,7 @@ HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR windowName
     const LONG h = wndRect.bottom - wndRect.top;
 
     // Get info about the monitor to position the window to the center
-    MONITORINFOEX mInfo;
+    MONITORINFOEX mInfo {};
     mInfo.cbSize = sizeof(MONITORINFOEX);
     GetMonitorInfo(MonitorFromPoint({ 0,  0}, MONITOR_DEFAULTTOPRIMARY), &mInfo);
 
@@ -358,16 +442,16 @@ HWND Application::InitWindow(const HINSTANCE hInstance, const LPCWSTR windowName
 
     // Create the actual window
     return CreateWindowEx(
-        0, L"Main", windowName,
+        WS_EX_OVERLAPPEDWINDOW, MAKEINTATOM(windowClass), windowName,
         WS_OVERLAPPEDWINDOW,
         hmw - w / 2, hmh - h / 2, w, h,
         nullptr, nullptr, hInstance, nullptr
     );
 }
 
-void Application::CreateWindowClass(const HINSTANCE hInstance) {
+auto Application::CreateWindowClass(const HINSTANCE hInstance) -> ATOM {
     // Describe and register window class for main window
-    WNDCLASSEX wndClass = {
+    const WNDCLASSEX wndClass = {
         sizeof(WNDCLASSEX),
         CS_HREDRAW | CS_VREDRAW,
         WindowProcedure,
@@ -376,10 +460,10 @@ void Application::CreateWindowClass(const HINSTANCE hInstance) {
         nullptr, L"Main", nullptr
     };
 
-    RegisterClassEx(&wndClass);
+    return RegisterClassEx(&wndClass);
 }
 
-LRESULT Application::WindowProcedure(const HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
+auto Application::WindowProcedure(const HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) -> LRESULT {
     // Handle different application messages from the main window
     switch(uMsg) {
         case WM_DESTROY:
@@ -390,8 +474,59 @@ LRESULT Application::WindowProcedure(const HWND hWnd, const UINT uMsg, const WPA
             Render();
             return 0;
 
+        case WM_SIZE: {
+            if (LOWORD(lParam) == 0 || HIWORD(lParam) == 0) {
+                return DefWindowProc(hWnd, uMsg, wParam, lParam);
+            }
+            constexpr std::array<ID3D11RenderTargetView*, 1> nullView { nullptr };
+            s_DeviceContext->OMSetRenderTargets(1, nullView.data(), nullptr);
+            s_RTV.Reset();
+            DirectX::ThrowIfFailed(
+                s_SwapChain->ResizeBuffers(1, LOWORD(lParam), HIWORD(lParam), DXGI_FORMAT_R8G8B8A8_UNORM, 0)
+            );
+            s_DSV.Reset();
+            s_DepthTexture.Reset();
+            CreateFrameResources(LOWORD(lParam), HIWORD(lParam));
+            s_DeviceContext->Flush();
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        case WM_SIZING: {
+            RECT pad{};
+            AdjustWindowRect(&pad, WS_OVERLAPPEDWINDOW, FALSE);
+
+            RECT* screenRect = reinterpret_cast<RECT*>(lParam);
+            RECT clientRect
+            {
+                screenRect->left - pad.left,
+                screenRect->top - pad.top,
+                screenRect->right - pad.right,
+                screenRect->bottom - pad.bottom
+            };
+
+            LONG clientWidth = clientRect.right - clientRect.left;
+            LONG clientHeight = clientRect.bottom - clientRect.top;
+
+            if (clientWidth == 0 || clientHeight == 0) {
+                return DefWindowProc(hWnd, uMsg, wParam, lParam);
+            }
+
+            constexpr std::array<ID3D11RenderTargetView*, 1> nullView { nullptr };
+            s_DeviceContext->OMSetRenderTargets(1, nullView.data(), nullptr);
+            s_RTV.Reset();
+            DirectX::ThrowIfFailed(
+                s_SwapChain->ResizeBuffers(1, clientWidth, clientHeight, DXGI_FORMAT_R8G8B8A8_UNORM, 0)
+            );
+            s_DSV.Reset();
+            s_DepthTexture.Reset();
+            CreateFrameResources(clientWidth, clientHeight);
+            s_DeviceContext->Flush();
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+        }
+
         case WM_ACTIVATE:
         case WM_ACTIVATEAPP:
+        case WM_MOUSEACTIVATE:
         case WM_INPUT:
         case WM_MOUSEMOVE:
         case WM_LBUTTONDOWN:
@@ -406,10 +541,6 @@ LRESULT Application::WindowProcedure(const HWND hWnd, const UINT uMsg, const WPA
         case WM_MOUSEHOVER:
             Mouse::ProcessMessage(uMsg, wParam, lParam);
             return 0;
-
-        case WM_MOUSEACTIVATE:
-            // When you click to activate the window, we want Mouse to ignore that event.
-            return MA_ACTIVATEANDEAT;
 
         default: {
             return DefWindowProc(hWnd, uMsg, wParam, lParam);

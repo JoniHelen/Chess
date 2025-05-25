@@ -1,6 +1,6 @@
 #include <pch.hpp>
 #include <Application.hpp>
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+auto WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nShowCmd) -> int {
     return Application::Run(hInstance);
 }

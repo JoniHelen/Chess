@@ -1,38 +1,64 @@
 #pragma once
 
+class Move;
 class Piece;
 
-/// <summary>
-/// Hash specialization for Vector2 for use in unordered_map
-/// </summary>
-template<>
-struct std::hash<Vector2> {
-    std::size_t operator ()(const Vector2& v) const noexcept {
-        return static_cast<int>(v.x) * 73856093 ^ static_cast<int>(v.y) * 19349663;
-    }
-};
-
-using BoardMap = std::unordered_map<Vector2, Piece>;
+#include <Position.hpp>
 
 /// <summary>
 /// Describes the chess board
 /// </summary>
 class Board final {
 public:
-
     /// <summary>
     /// Sets the board state to the specified state using FEN notation.
     /// Wipes the board before the operation
     /// </summary>
     /// <param name="fen"><c>string</c> The FEN string to initialize the board with</param>
-    static void SetState(const std::string& fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    static auto SetState(std::string_view fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") -> void;
 
     /// <summary>
     /// Gets the underlying board data
     /// </summary>
-    static BoardMap& GetBoard();
+    static auto GetBoard() -> std::unordered_map<Position, Piece>&;
+
+    static auto MakeMove(const Move& move) -> void;
+
+    static auto CalculateLegalMoves(const Position& pos, const Piece& piece, std::vector<Move>& moves) -> void;
+
+    static auto CalculatePawnAttacks(Position position, bool ignoreEmptySquares, std::vector<Position>& attackedSquares) -> void;
+    static auto CalculatePawnMoves(Position position, std::vector<Move>& moves) -> void;
+
+    static auto CalculateRookAttacks(Position position, bool ignoreEmptySquares, std::vector<Position>& attackedSquares) -> void;
+    static auto CalculateRookMoves(Position position, std::vector<Move>& moves) -> void;
+
+    static auto CalculateBishopAttacks(Position position, bool ignoreEmptySquares, std::vector<Position>& attackedSquares) -> void;
+    static auto CalculateBishopMoves(Position position, std::vector<Move>& moves) -> void;
+
+    static auto CalculateKnightAttacks(Position position, bool ignoreEmptySquares, std::vector<Position>& attackedSquares) -> void;
+    static auto CalculateKnightMoves(Position position, std::vector<Move>& moves) -> void;
+
+    static auto CalculateQueenAttacks(Position position, bool ignoreEmptySquares, std::vector<Position>& attackedSquares) -> void;
+    static auto CalculateQueenMoves(Position position, std::vector<Move>& moves) -> void;
+
+	static auto CalculateKingAttacks(Position position, bool ignoreEmptySquares, std::vector<Position>& attackedSquares) -> void;
+    static auto CalculateKingMoves(Position position, std::vector<Move>& moves) -> void;
+
+    static auto UpdateCheckState() -> void;
+
+    static auto GetKingPosition(bool white) -> Position;
+
+    static auto CheckForPins(const Position& ignorePos, std::vector<Position>& freeSquares) -> bool;
+
+    static auto GetSquaresBetween(const Position& start, const Position& end, std::vector<Position>& squares) -> void;
 
 private:
+
+    struct CheckStateData {
+	    bool IsInCheck;
+		std::vector<Position> Threats;
+        std::vector<Position> BlockingSquares;
+    };
 
     /// <summary>
     /// Checks if the specified char is empty space in FEN notation and initializes the amount
@@ -43,12 +69,12 @@ private:
     /// <example>
     /// <code>
     /// char c = '5';
-    /// if(int space = 0; FEN_IsEmptySpace(c, space)) {
+    /// if(int space = 0; IsEmptySpace(c, space)) {
     ///     // char c was 5 space -> space == 5
     /// }
     /// </code>
     /// </example>
-    static bool FEN_IsEmptySpace(const char& c, int& space);
+    static auto IsEmptySpace(const char& c, int& space) -> bool;
 
     /// <summary>
     /// Checks if the specified char is a piece in FEN notation and initializes the piece
@@ -59,15 +85,25 @@ private:
     /// <example>
     /// <code>
     /// char c = 'p';
-    /// if(Piece p(PieceFlags::Rook | PieceFlags::White); FEN_IsPiece(c, p)) {
+    /// if(Piece p(PieceFlags::Rook | PieceFlags::White); IsPiece(c, p)) {
     ///     // char c was a black pawn piece -> p == Piece(PieceFlags::Pawn | PieceFlags::Black)
     /// }
     /// </code>
     /// </example>
-    static bool FEN_IsPiece(const char& c, Piece& piece);
+    static auto IsPiece(const char& c, Piece& piece) -> bool;
+
+    inline static CheckStateData s_CheckState;
+
+    inline static bool s_WhiteToMove;
+    inline static bool s_EnPassantAvailable;
+    inline static bool s_WhiteCanCastleKingSide;
+    inline static bool s_WhiteCanCastleQueenSide;
+    inline static bool s_BlackCanCastleKingSide;
+    inline static bool s_BlackCanCastleQueenSide;
+    inline static Position s_EnPassantPosition;
 
     /// <summary>
     /// The board data containing pieces indexed by positions on the board
     /// </summary>
-    inline static BoardMap m_BoardData;
+    inline static std::unordered_map<Position, Piece> s_BoardData;
 };
